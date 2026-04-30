@@ -761,6 +761,7 @@ wss://relay.nostr.band</textarea>
           <span><i style="background:var(--accent-4)"></i>auth</span>
           <span><i style="background:var(--accent-2)"></i>err</span>
         </div>
+        <button class="ghost" id="btn-log-copy">copy json</button>
         <button class="ghost" id="btn-log-clear">clear</button>
       </div>
 
@@ -881,6 +882,35 @@ function escapeHTML(s) {
 
 $('btn-log-clear').onclick = () => {
   $('log').innerHTML = '<p class="empty">Log cleared.</p>';
+};
+
+$('btn-log-copy').onclick = async () => {
+  const entries = Array.from($('log').querySelectorAll('.log-entry')).reverse().map(el => {
+    const tag = el.querySelector('.log-tag')?.textContent.trim();
+    const time = el.querySelector('.log-time')?.textContent.trim();
+    const summary = el.querySelector('.log-summary')?.textContent.trim();
+    const out = { time, tag, summary };
+    const detail = el.querySelector('.log-detail');
+    if (detail) {
+      const labels = Array.from(detail.querySelectorAll('.label-mini'));
+      const pres = Array.from(detail.querySelectorAll('pre'));
+      labels.forEach((l, i) => {
+        const txt = pres[i]?.textContent || '';
+        const key = l.textContent.trim();
+        try { out[key] = JSON.parse(txt); }
+        catch { out[key] = txt; }
+      });
+    }
+    return out;
+  });
+  const json = JSON.stringify(entries, null, 2);
+  try {
+    await navigator.clipboard.writeText(json);
+    toast(`copied ${entries.length} log entries`);
+  } catch (e) {
+    console.log(json);
+    toast('clipboard blocked — see console');
+  }
 };
 
 // ============================================================
