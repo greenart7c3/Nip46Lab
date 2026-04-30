@@ -1,0 +1,1802 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NIP-46 Lab — Remote Signer Testbench</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0d0c;
+    --bg-2: #11151a;
+    --bg-3: #161b22;
+    --line: #1f2630;
+    --line-2: #2a323e;
+    --ink: #d6e0e6;
+    --ink-dim: #8a96a3;
+    --ink-faint: #5a6675;
+    --accent: #c2f23a;        /* electric lime — cipher / live */
+    --accent-2: #ff5b7e;      /* hot pink — error */
+    --accent-3: #6cb6ff;      /* cool blue — request */
+    --accent-4: #ffb86b;      /* amber — auth challenge */
+    --accent-5: #9d8cff;      /* violet — response */
+    --warn: #ffd166;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    --serif: 'Fraunces', ui-serif, Georgia, serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+      radial-gradient(ellipse at 80% -10%, rgba(194,242,58,0.06), transparent 50%),
+      radial-gradient(ellipse at 0% 110%, rgba(157,140,255,0.05), transparent 50%),
+      linear-gradient(var(--bg) 0 0);
+    background-attachment: fixed;
+  }
+
+  /* ---------- top chrome ---------- */
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 18px 28px 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 28px;
+    align-items: end;
+    backdrop-filter: blur(8px);
+    background: rgba(10,13,12,0.65);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .brand {
+    font-family: var(--serif);
+    font-weight: 800;
+    font-size: 28px;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .brand em {
+    color: var(--accent);
+    font-style: italic;
+    font-weight: 600;
+  }
+  .brand small {
+    display: block;
+    font-family: var(--mono);
+    font-weight: 400;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-top: 6px;
+  }
+  .status {
+    display: flex; gap: 18px; justify-content: flex-end; align-items: center;
+    font-size: 11px;
+    color: var(--ink-dim);
+  }
+  .status .dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ink-faint); margin-right: 6px; vertical-align: 1px;
+    transition: background .2s;
+  }
+  .status .dot.on { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .status .dot.warn { background: var(--accent-4); box-shadow: 0 0 10px var(--accent-4); }
+  .status .dot.err { background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); }
+  .status code { color: var(--ink); }
+  .net-status { font-size: 10px; color: var(--ink-faint); display: inline-flex; gap: 8px; }
+  .net-status .on { color: var(--accent); }
+  .net-status .off { color: var(--accent-2); }
+
+  /* ---------- layout ---------- */
+  main {
+    display: grid;
+    grid-template-columns: 420px 1fr 460px;
+    gap: 0;
+    height: calc(100vh - 88px);
+  }
+  .col {
+    overflow-y: auto;
+    border-right: 1px solid var(--line);
+  }
+  .col:last-child { border-right: none; }
+  .col-pad { padding: 22px 24px; }
+
+  h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: -0.01em;
+    margin: 0 0 4px;
+  }
+  .col h2:not(:first-child) { margin-top: 28px; }
+  .sub {
+    font-size: 11px;
+    color: var(--ink-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    margin-bottom: 14px;
+  }
+
+  /* ---------- forms ---------- */
+  label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-dim);
+    margin: 12px 0 5px;
+  }
+  input, textarea, select {
+    width: 100%;
+    background: var(--bg-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 9px 11px;
+    font-family: var(--mono);
+    font-size: 12px;
+    transition: border-color .15s, background .15s;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: #0e1310;
+  }
+  textarea { resize: vertical; min-height: 78px; line-height: 1.5; }
+  button {
+    background: var(--accent);
+    color: #0a0d0c;
+    border: none;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 9px 14px;
+    cursor: pointer;
+    transition: filter .15s, transform .05s;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: 0.35; cursor: not-allowed; }
+  button.ghost {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--line-2);
+  }
+  button.ghost:hover:not(:disabled) {
+    border-color: var(--accent);
+    color: var(--accent);
+    filter: none;
+  }
+  button.danger { background: var(--accent-2); color: #0a0d0c; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+  /* ---------- tabs ---------- */
+  .tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 18px;
+  }
+  .tab {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-dim);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color .15s, border-color .15s;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ---------- card / session ---------- */
+  .card {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 14px 16px;
+    margin: 10px 0;
+  }
+  .kv { display: grid; grid-template-columns: 92px 1fr; gap: 6px 10px; font-size: 11px; }
+  .kv dt { color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; padding-top: 1px; }
+  .kv dd {
+    margin: 0; word-break: break-all;
+    font-family: var(--mono);
+    color: var(--ink);
+  }
+  .kv dd.copyable { cursor: pointer; transition: color .15s; }
+  .kv dd.copyable:hover { color: var(--accent); }
+
+  /* ---------- methods ---------- */
+  .method {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    background: var(--bg-2);
+    overflow: hidden;
+  }
+  .method-head {
+    padding: 11px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    transition: background .15s;
+  }
+  .method-head:hover { background: var(--bg-3); }
+  .method-head .name {
+    font-weight: 500;
+    color: var(--accent);
+    font-size: 12px;
+  }
+  .method-head .name::before {
+    content: "▸ ";
+    color: var(--ink-faint);
+    transition: transform .2s;
+    display: inline-block;
+  }
+  .method.open .method-head .name::before { content: "▾ "; }
+  .method-head .desc {
+    font-size: 10px;
+    color: var(--ink-dim);
+    margin-left: 10px;
+    flex: 1;
+    text-align: right;
+  }
+  .method-body {
+    display: none;
+    padding: 8px 14px 14px;
+    border-top: 1px solid var(--line);
+  }
+  .method.open .method-body { display: block; }
+
+  /* ---------- log ---------- */
+  .log-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 0 0 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .log-controls .legend { display: flex; gap: 12px; font-size: 10px; color: var(--ink-faint); align-items: center; flex: 1;}
+  .log-controls .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .log-controls .legend i {
+    width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  }
+  .log-controls button {
+    padding: 5px 10px; font-size: 9px;
+  }
+  .log-entry {
+    border: 1px solid var(--line);
+    border-left-width: 3px;
+    border-radius: 4px;
+    padding: 9px 12px;
+    margin-bottom: 8px;
+    background: var(--bg-2);
+    font-size: 11px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .log-entry:hover { background: var(--bg-3); }
+  .log-entry.req { border-left-color: var(--accent-3); }
+  .log-entry.res { border-left-color: var(--accent-5); }
+  .log-entry.auth { border-left-color: var(--accent-4); }
+  .log-entry.err { border-left-color: var(--accent-2); }
+  .log-entry.sys { border-left-color: var(--ink-faint); }
+  .log-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 3px;
+  }
+  .log-tag {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    padding: 1px 6px;
+    border-radius: 2px;
+    font-weight: 700;
+  }
+  .log-entry.req .log-tag { background: rgba(108,182,255,0.15); color: var(--accent-3); }
+  .log-entry.res .log-tag { background: rgba(157,140,255,0.15); color: var(--accent-5); }
+  .log-entry.auth .log-tag { background: rgba(255,184,107,0.15); color: var(--accent-4); }
+  .log-entry.err .log-tag { background: rgba(255,91,126,0.15); color: var(--accent-2); }
+  .log-entry.sys .log-tag { background: rgba(138,150,163,0.12); color: var(--ink-dim); }
+  .log-time { color: var(--ink-faint); font-size: 10px; }
+  .log-summary {
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .log-summary code { color: var(--accent); }
+  .log-detail {
+    display: none;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--line-2);
+  }
+  .log-entry.expanded .log-detail { display: block; }
+  .log-detail pre {
+    background: var(--bg);
+    border-radius: 3px;
+    padding: 8px 10px;
+    margin: 4px 0 8px;
+    overflow-x: auto;
+    font-size: 10px;
+    line-height: 1.5;
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .log-detail .label-mini {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
+    margin: 6px 0 2px;
+  }
+
+  /* ---------- relay manager ---------- */
+  .relay-list { margin: 8px 0 0; }
+  .relay-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    padding: 7px 12px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    font-size: 11px;
+  }
+  .relay-item .url { color: var(--ink); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .relay-item .state { font-size: 9px; padding: 1px 6px; border-radius: 2px; margin: 0 8px; text-transform: uppercase; letter-spacing: 0.1em; }
+  .relay-item .state.connected { background: rgba(194,242,58,0.15); color: var(--accent); }
+  .relay-item .state.connecting { background: rgba(255,184,107,0.15); color: var(--accent-4); }
+  .relay-item .state.disconnected { background: rgba(255,91,126,0.15); color: var(--accent-2); }
+  .relay-item .x { color: var(--ink-faint); cursor: pointer; padding: 0 4px; }
+  .relay-item .x:hover { color: var(--accent-2); }
+
+  /* ---------- modal / auth ---------- */
+  .auth-banner {
+    margin: 10px 0;
+    padding: 14px;
+    background: linear-gradient(135deg, rgba(255,184,107,0.12), rgba(255,184,107,0.04));
+    border: 1px solid var(--accent-4);
+    border-radius: 6px;
+    font-size: 12px;
+  }
+  .auth-banner h3 {
+    margin: 0 0 6px;
+    color: var(--accent-4);
+    font-family: var(--serif);
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .auth-banner a {
+    color: var(--accent);
+    text-decoration: underline;
+    word-break: break-all;
+  }
+
+  /* ---------- helpers ---------- */
+  .hint {
+    font-size: 11px;
+    color: var(--ink-faint);
+    line-height: 1.55;
+    margin: 6px 0 0;
+  }
+  .hint a { color: var(--accent); text-decoration: none; }
+  .hint a:hover { text-decoration: underline; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .pill {
+    display: inline-block; font-size: 9px; padding: 2px 7px; border-radius: 10px;
+    background: var(--bg-3); color: var(--ink-dim);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    border: 1px solid var(--line);
+    margin-right: 4px;
+  }
+  .empty { color: var(--ink-faint); font-style: italic; padding: 16px 0; text-align: center; font-size: 11px; }
+  .qr-wrap {
+    background: #fff; padding: 12px; border-radius: 6px; display: inline-block;
+    margin: 10px 0;
+  }
+  .qr-wrap canvas, .qr-wrap img { display: block; }
+  .copy-row {
+    display: flex; gap: 6px; align-items: stretch; margin-top: 6px;
+  }
+  .copy-row input { flex: 1; }
+  .copy-row button { padding: 0 12px; font-size: 10px; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--ink); color: var(--bg);
+    padding: 10px 18px; border-radius: 4px;
+    font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    transform: translateY(80px); opacity: 0;
+    transition: transform .3s, opacity .3s;
+    z-index: 100;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.err { background: var(--accent-2); color: #fff; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr; height: auto; }
+    .col { border-right: none; border-bottom: 1px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    nip<em>·46</em> lab
+    <small>remote signer testbench</small>
+  </div>
+  <div></div>
+  <div class="status">
+    <span id="net-status" class="net-status"></span>
+    <span><span class="dot" id="conn-dot"></span><span id="conn-text">disconnected</span></span>
+    <span>local: <code id="local-pub">—</code></span>
+    <span>user: <code id="user-pub">—</code></span>
+  </div>
+</header>
+
+<main>
+  <!-- LEFT COLUMN: connection -->
+  <section class="col">
+    <div class="col-pad">
+      <h2>Connection</h2>
+      <div class="sub">Establish a session with a bunker</div>
+
+      <div class="tabs">
+        <div class="tab active" data-tab="bunker">bunker://</div>
+        <div class="tab" data-tab="nostrconnect">nostrconnect://</div>
+        <div class="tab" data-tab="session">session</div>
+      </div>
+
+      <!-- bunker:// flow (signer-initiated) -->
+      <div class="panel active" data-panel="bunker">
+        <p class="hint">Signer-initiated flow. Paste a <code>bunker://</code> URI from your remote signer (nsec.app, nsecBunker, Amber, etc.).</p>
+        <label>Bunker URI</label>
+        <textarea id="bunker-uri" placeholder="bunker://&lt;remote-signer-pubkey&gt;?relay=wss://...&secret=..."></textarea>
+        <label>Local secret key (hex / nsec) — leave blank to generate</label>
+        <input id="bunker-local-sk" placeholder="auto-generate" />
+        <label>Requested permissions (optional)</label>
+        <input id="bunker-perms" value="sign_event:1,sign_event:0,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt" />
+        <div class="btn-row">
+          <button id="btn-bunker-connect">connect</button>
+          <button class="ghost" id="btn-bunker-paste">paste</button>
+        </div>
+      </div>
+
+      <!-- nostrconnect:// flow (client-initiated) -->
+      <div class="panel" data-panel="nostrconnect">
+        <p class="hint">Client-initiated flow. Generate a <code>nostrconnect://</code> URI, then paste it into your signer to approve.</p>
+        <div class="row">
+          <div>
+            <label>App name</label>
+            <input id="nc-name" value="NIP-46 Lab" />
+          </div>
+          <div>
+            <label>App URL</label>
+            <input id="nc-url" value="https://nip46.lab" />
+          </div>
+        </div>
+        <label>Relays (one per line)</label>
+        <textarea id="nc-relays">wss://relay.nsec.app
+wss://relay.nostr.band</textarea>
+        <label>Requested permissions</label>
+        <input id="nc-perms" value="sign_event:1,sign_event:0,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt,get_public_key" />
+        <div class="btn-row">
+          <button id="btn-nc-generate">generate URI</button>
+          <button class="ghost" id="btn-nc-cancel" disabled>cancel listening</button>
+        </div>
+        <div id="nc-output" style="display:none">
+          <label>Generated URI</label>
+          <div class="copy-row">
+            <input id="nc-uri-out" readonly />
+            <button class="ghost" id="btn-nc-copy">copy</button>
+          </div>
+          <div class="qr-wrap" id="nc-qr"></div>
+          <p class="hint" id="nc-status">Waiting for signer to connect…</p>
+        </div>
+      </div>
+
+      <!-- session info -->
+      <div class="panel" data-panel="session">
+        <div id="session-info">
+          <p class="empty">No active session.</p>
+        </div>
+      </div>
+
+      <h2>Reliability</h2>
+      <div class="sub">Auto-reconnect & health monitoring</div>
+      <div class="card" style="padding: 10px 12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <input type="checkbox" id="cb-reconnect" checked style="width:auto;margin:0">
+          <label for="cb-reconnect" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink)">auto-reconnect dropped relays (exp backoff)</label>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <input type="checkbox" id="cb-heartbeat" checked style="width:auto;margin:0">
+          <label for="cb-heartbeat" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink)">heartbeat ping every 45s</label>
+        </div>
+        <p class="hint" style="margin: 6px 0 0">Logs network changes, page visibility, suspension, and bfcache restore. After a long suspension or network change, all relays are re-validated.</p>
+      </div>
+
+      <h2>Transport encryption</h2>
+      <div class="sub">Auto-detected from incoming events · click to override</div>
+      <div class="btn-row" style="margin-top:0">
+        <button class="ghost" id="btn-enc-nip04">NIP-04</button>
+        <button class="ghost" id="btn-enc-nip44">NIP-44</button>
+        <span class="hint" style="align-self:center;margin:0 0 0 8px">current: <code id="enc-mode-display">nip04</code></span>
+      </div>
+
+      <h2>Relays</h2>
+      <div class="sub">Active subscription relays</div>
+      <div id="relay-list" class="relay-list">
+        <p class="empty">No relays connected.</p>
+      </div>
+      <label>Add relay manually</label>
+      <div class="copy-row">
+        <input id="add-relay-url" placeholder="wss://relay.example.com" />
+        <button class="ghost" id="btn-add-relay">add</button>
+      </div>
+
+      <div id="auth-banner-host"></div>
+    </div>
+  </section>
+
+  <!-- MIDDLE COLUMN: methods -->
+  <section class="col">
+    <div class="col-pad">
+      <h2>RPC Methods</h2>
+      <div class="sub">All NIP-46 commands · click to expand</div>
+
+      <!-- ping -->
+      <div class="method" data-method="ping">
+        <div class="method-head">
+          <span class="name">ping</span>
+          <span class="desc">no params · expects "pong"</span>
+        </div>
+        <div class="method-body">
+          <div class="btn-row">
+            <button data-call="ping">send ping</button>
+          </div>
+          <div class="result" id="r-ping"></div>
+        </div>
+      </div>
+
+      <!-- get_public_key -->
+      <div class="method" data-method="get_public_key">
+        <div class="method-head">
+          <span class="name">get_public_key</span>
+          <span class="desc">returns user-pubkey (hex)</span>
+        </div>
+        <div class="method-body">
+          <div class="btn-row">
+            <button data-call="get_public_key">fetch user pubkey</button>
+          </div>
+          <div class="result" id="r-get_public_key"></div>
+        </div>
+      </div>
+
+      <!-- sign_event -->
+      <div class="method" data-method="sign_event">
+        <div class="method-head">
+          <span class="name">sign_event</span>
+          <span class="desc">signs an unsigned event</span>
+        </div>
+        <div class="method-body">
+          <div class="row">
+            <div>
+              <label>Kind</label>
+              <input id="se-kind" value="1" />
+            </div>
+            <div>
+              <label>created_at</label>
+              <input id="se-created" placeholder="auto" />
+            </div>
+          </div>
+          <label>Content</label>
+          <textarea id="se-content">Hello from NIP-46 Lab — signed by my bunker.</textarea>
+          <label>Tags (JSON array of arrays)</label>
+          <textarea id="se-tags">[["t","nip46lab"]]</textarea>
+          <div class="btn-row">
+            <button data-call="sign_event">sign event</button>
+            <button class="ghost" id="btn-publish-signed" disabled>publish to relays</button>
+          </div>
+          <div class="result" id="r-sign_event"></div>
+        </div>
+      </div>
+
+      <!-- nip04_encrypt -->
+      <div class="method" data-method="nip04_encrypt">
+        <div class="method-head">
+          <span class="name">nip04_encrypt</span>
+          <span class="desc">legacy DM encryption</span>
+        </div>
+        <div class="method-body">
+          <label>Recipient pubkey (hex)</label>
+          <input class="enc-pub" id="n4e-pub" placeholder="64-char hex" />
+          <label>Plaintext</label>
+          <textarea id="n4e-text">test message via nip-04</textarea>
+          <div class="btn-row">
+            <button data-call="nip04_encrypt">encrypt</button>
+            <button class="ghost" data-fill-self="n4e-pub">use my pubkey</button>
+          </div>
+          <div class="result" id="r-nip04_encrypt"></div>
+        </div>
+      </div>
+
+      <!-- nip04_decrypt -->
+      <div class="method" data-method="nip04_decrypt">
+        <div class="method-head">
+          <span class="name">nip04_decrypt</span>
+          <span class="desc">decrypt a NIP-04 ciphertext</span>
+        </div>
+        <div class="method-body">
+          <label>Sender pubkey (hex)</label>
+          <input class="enc-pub" id="n4d-pub" placeholder="64-char hex" />
+          <label>Ciphertext (base64?iv=base64)</label>
+          <textarea id="n4d-text" placeholder="paste ciphertext from nip04_encrypt"></textarea>
+          <div class="btn-row">
+            <button data-call="nip04_decrypt">decrypt</button>
+            <button class="ghost" data-fill-self="n4d-pub">use my pubkey</button>
+          </div>
+          <div class="result" id="r-nip04_decrypt"></div>
+        </div>
+      </div>
+
+      <!-- nip44_encrypt -->
+      <div class="method" data-method="nip44_encrypt">
+        <div class="method-head">
+          <span class="name">nip44_encrypt</span>
+          <span class="desc">modern v2 encryption</span>
+        </div>
+        <div class="method-body">
+          <label>Recipient pubkey (hex)</label>
+          <input class="enc-pub" id="n44e-pub" placeholder="64-char hex" />
+          <label>Plaintext</label>
+          <textarea id="n44e-text">test message via nip-44</textarea>
+          <div class="btn-row">
+            <button data-call="nip44_encrypt">encrypt</button>
+            <button class="ghost" data-fill-self="n44e-pub">use my pubkey</button>
+          </div>
+          <div class="result" id="r-nip44_encrypt"></div>
+        </div>
+      </div>
+
+      <!-- nip44_decrypt -->
+      <div class="method" data-method="nip44_decrypt">
+        <div class="method-head">
+          <span class="name">nip44_decrypt</span>
+          <span class="desc">decrypt a NIP-44 payload</span>
+        </div>
+        <div class="method-body">
+          <label>Sender pubkey (hex)</label>
+          <input class="enc-pub" id="n44d-pub" placeholder="64-char hex" />
+          <label>Ciphertext (base64)</label>
+          <textarea id="n44d-text" placeholder="paste ciphertext from nip44_encrypt"></textarea>
+          <div class="btn-row">
+            <button data-call="nip44_decrypt">decrypt</button>
+            <button class="ghost" data-fill-self="n44d-pub">use my pubkey</button>
+          </div>
+          <div class="result" id="r-nip44_decrypt"></div>
+        </div>
+      </div>
+
+      <!-- switch_relays -->
+      <div class="method" data-method="switch_relays">
+        <div class="method-head">
+          <span class="name">switch_relays</span>
+          <span class="desc">signer returns its preferred relay set</span>
+        </div>
+        <div class="method-body">
+          <p class="hint">Per spec, clients should call this after connecting. Signer responds with an array of relay URLs (or null).</p>
+          <div class="btn-row">
+            <button data-call="switch_relays">request relay list</button>
+          </div>
+          <div class="result" id="r-switch_relays"></div>
+        </div>
+      </div>
+
+      <!-- raw -->
+      <div class="method" data-method="raw">
+        <div class="method-head">
+          <span class="name">raw</span>
+          <span class="desc">send arbitrary method · for testing extensions</span>
+        </div>
+        <div class="method-body">
+          <label>Method name</label>
+          <input id="raw-method" placeholder="e.g. create_account" />
+          <label>Params (JSON array of strings)</label>
+          <textarea id="raw-params">[]</textarea>
+          <div class="btn-row">
+            <button data-call="raw">send</button>
+          </div>
+          <div class="result" id="r-raw"></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- RIGHT COLUMN: log -->
+  <section class="col">
+    <div class="col-pad">
+      <h2>Event Log</h2>
+      <div class="sub">Live wire trace · kind 24133</div>
+
+      <div class="log-controls">
+        <div class="legend">
+          <span><i style="background:var(--accent-3)"></i>req</span>
+          <span><i style="background:var(--accent-5)"></i>res</span>
+          <span><i style="background:var(--accent-4)"></i>auth</span>
+          <span><i style="background:var(--accent-2)"></i>err</span>
+        </div>
+        <button class="ghost" id="btn-log-clear">clear</button>
+      </div>
+
+      <div id="log">
+        <p class="empty">No events yet. Connect to begin.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<!-- nostr-tools v2 (works in browser) + qrcodejs -->
+<script type="module">
+import * as nt from 'https://esm.sh/nostr-tools@2.10.4';
+import * as nip04 from 'https://esm.sh/nostr-tools@2.10.4/nip04';
+import * as nip19 from 'https://esm.sh/nostr-tools@2.10.4/nip19';
+import { Relay } from 'https://esm.sh/nostr-tools@2.10.4/relay';
+import { v2 as nip44 } from 'https://esm.sh/nostr-tools@2.10.4/nip44';
+import QRCode from 'https://esm.sh/qrcode@1.5.4';
+
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  localSk: null,         // Uint8Array — client-keypair private key
+  localPk: null,         // hex string — client-pubkey
+  remoteSignerPk: null,  // hex string — remote-signer-pubkey (encryption peer)
+  userPk: null,          // hex string — user-pubkey (the actual identity being signed for)
+  relays: new Map(),     // url -> { relay, status }
+  pending: new Map(),    // request_id -> { resolve, reject, method, expectedSecret? }
+  bunkerSecret: null,    // for nostrconnect:// validation
+  encMode: 'nip04',      // detected encryption mode for transport — start with nip04 (most compatible), auto-upgrade on first inbound
+  lastSignedEvent: null,
+  ncAbort: null,
+  // reliability
+  online: navigator.onLine,
+  visible: !document.hidden,
+  reconnect: {
+    enabled: true,
+    attempts: new Map(),     // url -> attempt count
+    timers: new Map(),       // url -> setTimeout handle
+    baseMs: 1000,
+    maxMs: 30000,
+  },
+  heartbeat: {
+    enabled: true,
+    intervalMs: 45000,
+    timer: null,
+    lastOk: 0,
+    misses: 0,
+  },
+  lastActivity: Date.now(),  // for suspension detection
+};
+
+window.__nip46 = state;  // for debugging
+
+// ============================================================
+// UTILS
+// ============================================================
+const $ = (id) => document.getElementById(id);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+function hex(bytes) { return Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join(''); }
+function fromHex(s) {
+  const u = new Uint8Array(s.length/2);
+  for (let i=0;i<u.length;i++) u[i] = parseInt(s.substr(i*2,2),16);
+  return u;
+}
+function shorten(s, n=10) { if (!s) return '—'; return s.length > n*2 ? s.slice(0,n) + '…' + s.slice(-6) : s; }
+function nowSec() { return Math.floor(Date.now()/1000); }
+function rid() {
+  const a = new Uint8Array(8); crypto.getRandomValues(a);
+  return hex(a);
+}
+
+function toast(msg, isErr=false) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.className = 'toast', 2200);
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast('copied'); }
+  catch { toast('copy failed', true); }
+}
+
+// ============================================================
+// LOG
+// ============================================================
+function log(kind, summary, detail = {}) {
+  const host = $('log');
+  if (host.querySelector('.empty')) host.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = `log-entry ${kind}`;
+  const time = new Date().toLocaleTimeString('en-US', { hour12:false });
+  let detailHTML = '';
+  for (const [k,v] of Object.entries(detail)) {
+    const text = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+    detailHTML += `<div class="label-mini">${k}</div><pre>${escapeHTML(text)}</pre>`;
+  }
+  el.innerHTML = `
+    <div class="log-head">
+      <span><span class="log-tag">${kind}</span></span>
+      <span class="log-time">${time}</span>
+    </div>
+    <div class="log-summary">${summary}</div>
+    <div class="log-detail">${detailHTML}</div>
+  `;
+  el.addEventListener('click', () => el.classList.toggle('expanded'));
+  host.prepend(el);
+}
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+$('btn-log-clear').onclick = () => {
+  $('log').innerHTML = '<p class="empty">Log cleared.</p>';
+};
+
+// ============================================================
+// STATUS UI
+// ============================================================
+function updateStatus() {
+  const dot = $('conn-dot');
+  const text = $('conn-text');
+  const connectedRelays = [...state.relays.values()].filter(r => r.status === 'connected').length;
+  if (state.userPk && connectedRelays > 0) {
+    dot.className = 'dot on';
+    text.textContent = `connected · ${connectedRelays} relay${connectedRelays>1?'s':''}`;
+  } else if (connectedRelays > 0) {
+    dot.className = 'dot warn';
+    text.textContent = `relays up · awaiting auth`;
+  } else {
+    dot.className = 'dot';
+    text.textContent = 'disconnected';
+  }
+  $('local-pub').textContent = state.localPk ? shorten(state.localPk, 6) : '—';
+  $('user-pub').textContent = state.userPk ? shorten(state.userPk, 6) : '—';
+
+  // populate "use my pubkey" buttons
+  if (state.userPk) $$('.enc-pub').forEach(i => i.placeholder ||= state.userPk);
+
+  renderRelayList();
+  renderSession();
+}
+
+function renderRelayList() {
+  const host = $('relay-list');
+  if (state.relays.size === 0) {
+    host.innerHTML = '<p class="empty">No relays connected.</p>';
+    return;
+  }
+  host.innerHTML = '';
+  for (const [url, r] of state.relays) {
+    const el = document.createElement('div');
+    el.className = 'relay-item';
+    el.innerHTML = `
+      <span class="url">${escapeHTML(url)}</span>
+      <span class="state ${r.status}">${r.status}</span>
+      <span class="x" title="disconnect">✕</span>
+    `;
+    el.querySelector('.x').onclick = () => { disconnectRelay(url); };
+    host.appendChild(el);
+  }
+}
+
+function renderSession() {
+  const host = $('session-info');
+  if (!state.localPk) {
+    host.innerHTML = '<p class="empty">No active session.</p>';
+    return;
+  }
+  const localNsec = state.localSk ? nip19.nsecEncode(state.localSk) : '';
+  const userNpub = state.userPk ? nip19.npubEncode(state.userPk) : '—';
+  const remoteNpub = state.remoteSignerPk ? nip19.npubEncode(state.remoteSignerPk) : '—';
+  host.innerHTML = `
+    <div class="card">
+      <dl class="kv">
+        <dt>client pk</dt><dd class="copyable" data-copy="${state.localPk}">${shorten(state.localPk, 12)}</dd>
+        <dt>client sk</dt><dd class="copyable" data-copy="${localNsec}">${shorten(localNsec, 10)}</dd>
+        <dt>signer pk</dt><dd class="copyable" data-copy="${state.remoteSignerPk||''}">${shorten(state.remoteSignerPk, 12)}</dd>
+        <dt>signer npub</dt><dd class="copyable" data-copy="${remoteNpub}">${shorten(remoteNpub, 14)}</dd>
+        <dt>user pk</dt><dd class="copyable" data-copy="${state.userPk||''}">${shorten(state.userPk, 12)}</dd>
+        <dt>user npub</dt><dd class="copyable" data-copy="${userNpub}">${shorten(userNpub, 14)}</dd>
+        <dt>encryption</dt><dd>${state.encMode}</dd>
+      </dl>
+      <div class="btn-row">
+        <button class="ghost" id="btn-export">export bunker URI</button>
+        <button class="danger" id="btn-disconnect">disconnect</button>
+      </div>
+    </div>
+  `;
+  host.querySelectorAll('.copyable').forEach(el => {
+    el.onclick = () => copy(el.dataset.copy);
+  });
+  $('btn-disconnect').onclick = disconnect;
+  $('btn-export').onclick = () => {
+    if (!state.remoteSignerPk) { toast('no signer connected', true); return; }
+    const relayParams = [...state.relays.keys()].map(r => `relay=${encodeURIComponent(r)}`).join('&');
+    const uri = `bunker://${state.remoteSignerPk}?${relayParams}`;
+    copy(uri);
+  };
+}
+
+// ============================================================
+// RELAY MANAGEMENT
+// ============================================================
+async function addRelay(url, opts = {}) {
+  url = url.trim();
+  if (!url) return;
+  if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
+    toast('relay must start with ws:// or wss://', true); return;
+  }
+
+  let entry = state.relays.get(url);
+  if (entry && entry.status === 'connected') return;
+  if (!entry) {
+    entry = { relay: null, status: 'connecting', sub: null, manual: !opts.fromReconnect };
+    state.relays.set(url, entry);
+  } else {
+    entry.status = 'connecting';
+  }
+  updateStatus();
+
+  try {
+    const relay = await Relay.connect(url);
+    entry.relay = relay;
+    entry.status = 'connected';
+    state.reconnect.attempts.delete(url);
+    if (opts.fromReconnect) {
+      log('sys', `↻ reconnected to <code>${url}</code>`);
+    } else {
+      log('sys', `connected to <code>${url}</code>`);
+    }
+
+    // Hook onclose to detect drops
+    relay.onclose = () => {
+      const e = state.relays.get(url);
+      if (!e) return;  // already removed manually
+      e.status = 'disconnected';
+      e.relay = null;
+      e.sub = null;
+      log('err', `× connection lost: <code>${url}</code>`);
+      updateStatus();
+      scheduleReconnect(url);
+    };
+
+    // subscribe to responses for our local pubkey
+    if (state.localPk) {
+      subscribeRelay(url);
+    }
+  } catch (e) {
+    entry.status = 'disconnected';
+    log('err', `failed to connect <code>${url}</code>`, { error: String(e) });
+    if (!opts.silent) toast(`relay failed: ${url}`, true);
+    scheduleReconnect(url);
+  }
+  updateStatus();
+}
+
+function scheduleReconnect(url) {
+  if (!state.reconnect.enabled) return;
+  if (!state.relays.has(url)) return;  // user removed it
+  if (!state.online) {
+    log('sys', `⏸ reconnect to <code>${url}</code> deferred — browser offline`);
+    return;
+  }
+  // clear any pending timer
+  const existing = state.reconnect.timers.get(url);
+  if (existing) clearTimeout(existing);
+
+  const attempt = (state.reconnect.attempts.get(url) || 0) + 1;
+  state.reconnect.attempts.set(url, attempt);
+
+  // exp backoff with jitter
+  const base = Math.min(
+    state.reconnect.maxMs,
+    state.reconnect.baseMs * Math.pow(2, attempt - 1)
+  );
+  const delay = Math.floor(base * (0.7 + Math.random() * 0.6));
+  log('sys', `⟳ reconnect attempt #${attempt} to <code>${url}</code> in ${(delay/1000).toFixed(1)}s`);
+
+  const t = setTimeout(() => {
+    state.reconnect.timers.delete(url);
+    if (!state.relays.has(url)) return;
+    addRelay(url, { fromReconnect: true, silent: true });
+  }, delay);
+  state.reconnect.timers.set(url, t);
+}
+
+function reconnectAll() {
+  for (const [url, entry] of state.relays) {
+    if (entry.status !== 'connected') {
+      // cancel any backoff and try immediately
+      const t = state.reconnect.timers.get(url);
+      if (t) { clearTimeout(t); state.reconnect.timers.delete(url); }
+      state.reconnect.attempts.delete(url);
+      addRelay(url, { fromReconnect: true, silent: true });
+    }
+  }
+}
+
+function subscribeRelay(url) {
+  const entry = state.relays.get(url);
+  if (!entry || !entry.relay || entry.sub) return;
+  // since: now - 10s threshold (per spec advice for ephemeral events)
+  entry.sub = entry.relay.subscribe(
+    [{ kinds: [24133], '#p': [state.localPk], since: nowSec() - 10 }],
+    {
+      onevent(ev) { handleIncomingEvent(ev); },
+      oneose() { /* noop */ },
+    }
+  );
+}
+
+function disconnectRelay(url) {
+  const entry = state.relays.get(url);
+  if (!entry) return;
+  // cancel any scheduled reconnect
+  const t = state.reconnect.timers.get(url);
+  if (t) { clearTimeout(t); state.reconnect.timers.delete(url); }
+  state.reconnect.attempts.delete(url);
+  // strip onclose so it doesn't trigger reconnect
+  if (entry.relay) try { entry.relay.onclose = null; } catch {}
+  try { entry.sub?.close(); } catch {}
+  try { entry.relay?.close(); } catch {}
+  state.relays.delete(url);
+  log('sys', `disconnected from <code>${url}</code>`);
+  updateStatus();
+}
+
+$('btn-add-relay').onclick = async () => {
+  const v = $('add-relay-url').value.trim();
+  if (!v) return;
+  await addRelay(v);
+  $('add-relay-url').value = '';
+};
+
+// Encryption mode override
+$('btn-enc-nip04').onclick = () => { state.encMode = 'nip04'; updateEncDisplay(); toast('encryption: nip04'); };
+$('btn-enc-nip44').onclick = () => { state.encMode = 'nip44'; updateEncDisplay(); toast('encryption: nip44'); };
+function updateEncDisplay() {
+  const el = $('enc-mode-display');
+  if (el) el.textContent = state.encMode;
+}
+
+// Reliability toggles
+$('cb-reconnect').onchange = (e) => {
+  state.reconnect.enabled = e.target.checked;
+  if (!e.target.checked) {
+    // cancel any pending timers
+    for (const [url, t] of state.reconnect.timers) clearTimeout(t);
+    state.reconnect.timers.clear();
+  }
+  log('sys', `auto-reconnect <code>${e.target.checked ? 'enabled' : 'disabled'}</code>`);
+};
+$('cb-heartbeat').onchange = (e) => {
+  state.heartbeat.enabled = e.target.checked;
+  if (e.target.checked) startHeartbeat();
+  else stopHeartbeat();
+  log('sys', `heartbeat <code>${e.target.checked ? 'enabled' : 'disabled'}</code>`);
+};
+
+// ============================================================
+// ENCRYPTION (auto-detect: nip04 or nip44; auto-upgrade on inbound)
+// ============================================================
+async function encryptOutTo(plaintext, peerPk) {
+  if (state.encMode === 'nip44') {
+    const conv = nip44.utils.getConversationKey(state.localSk, peerPk);
+    return nip44.encrypt(plaintext, conv);
+  }
+  // default nip04 — most widely supported by deployed bunkers
+  return await nip04.encrypt(state.localSk, peerPk, plaintext);
+}
+
+async function decryptIn(ciphertext, fromPk) {
+  // Detect by content shape: nip04 has "?iv=" suffix; nip44 is base64-only
+  const looksLikeNip04 = /\?iv=/.test(ciphertext);
+  const tryOrder = looksLikeNip04 ? ['nip04', 'nip44'] : ['nip44', 'nip04'];
+
+  let lastErr;
+  for (const mode of tryOrder) {
+    try {
+      let pt;
+      if (mode === 'nip44') {
+        const conv = nip44.utils.getConversationKey(state.localSk, fromPk);
+        pt = nip44.decrypt(ciphertext, conv);
+      } else {
+        pt = await nip04.decrypt(state.localSk, fromPk, ciphertext);
+      }
+      if (state.encMode !== mode) {
+        state.encMode = mode;
+        log('sys', `auto-detected encryption: <code>${mode}</code>`);
+        updateEncDisplay?.();
+      }
+      return pt;
+    } catch (e) { lastErr = e; }
+  }
+  throw new Error('decryption failed (tried nip44 and nip04): ' + (lastErr?.message || ''));
+}
+
+// ============================================================
+// CORE: send request, await response
+// ============================================================
+async function sendRequest(method, params, opts = {}) {
+  if (!state.localSk) throw new Error('no local key — connect first');
+  if (!state.remoteSignerPk && method !== '__nc_listen__') throw new Error('no remote signer pubkey');
+
+  const id = rid();
+  const payload = { id, method, params };
+  const targetPk = opts.targetPk || state.remoteSignerPk;
+
+  const cipher = await encryptOutTo(JSON.stringify(payload), targetPk);
+  const evtTpl = {
+    kind: 24133,
+    pubkey: state.localPk,
+    created_at: nowSec(),
+    tags: [['p', targetPk]],
+    content: cipher,
+  };
+  const signed = nt.finalizeEvent(evtTpl, state.localSk);
+
+  if (!opts.silent) {
+    log('req', `→ <code>${method}</code> · id=${id.slice(0,8)} · to ${shorten(targetPk,6)}`, {
+      method, params, id, target: targetPk, event: signed
+    });
+  }
+
+  const connectedRelays = [...state.relays.values()].filter(r => r.status === 'connected');
+  if (connectedRelays.length === 0) throw new Error('no connected relays');
+
+  // publish
+  await Promise.allSettled(connectedRelays.map(r =>
+    r.relay.publish(signed).catch(e => log('err', `publish failed: ${e.message}`))
+  ));
+
+  // await response
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      state.pending.delete(id);
+      reject(new Error(`timeout waiting for ${method} response`));
+    }, opts.timeout || 60000);
+
+    state.pending.set(id, {
+      resolve: (v) => { clearTimeout(timeout); resolve(v); },
+      reject: (e) => { clearTimeout(timeout); reject(e); },
+      method,
+      onAuth: opts.onAuth,
+      silent: opts.silent,
+    });
+  });
+}
+
+// ============================================================
+// HANDLE INCOMING EVENTS
+// ============================================================
+const seenEventIds = new Set();
+async function handleIncomingEvent(ev) {
+  if (seenEventIds.has(ev.id)) return;
+  seenEventIds.add(ev.id);
+
+  // p-tag must be us
+  const pTag = ev.tags.find(t => t[0] === 'p');
+  if (!pTag || pTag[1] !== state.localPk) return;
+
+  let payload;
+  try {
+    const pt = await decryptIn(ev.content, ev.pubkey);
+    payload = JSON.parse(pt);
+  } catch (e) {
+    log('err', `failed to decrypt event from ${shorten(ev.pubkey,6)}`, { error: String(e), event: ev });
+    return;
+  }
+
+  // is this a response to a pending request?
+  const pending = state.pending.get(payload.id);
+
+  // Special case: nostrconnect:// — first incoming response from a brand-new signer
+  if (!pending && state.ncAbort && payload.result) {
+    // the "connect" response identifies the signer
+    handleNostrConnectResponse(ev, payload);
+    return;
+  }
+
+  if (!pending) {
+    log('sys', `unknown response id=${payload.id?.slice(0,8) || '?'} from ${shorten(ev.pubkey,6)}`, { payload, event: ev });
+    return;
+  }
+
+  // auth challenge
+  if (payload.result === 'auth_url') {
+    const url = payload.error;
+    log('auth', `auth challenge for <code>${pending.method}</code>: ${escapeHTML(url)}`, { url, payload });
+    showAuthBanner(url);
+    if (pending.onAuth) pending.onAuth(url);
+    // do NOT remove pending — the signer will send another response with same id
+    return;
+  }
+
+  // resolve / reject
+  state.pending.delete(payload.id);
+  if (payload.error) {
+    if (!pending.silent) log('err', `← <code>${pending.method}</code> error: ${escapeHTML(payload.error)}`, { payload, event: ev });
+    pending.reject(new Error(payload.error));
+  } else {
+    if (!pending.silent) log('res', `← <code>${pending.method}</code> · ${escapeHTML(shortenResult(payload.result))}`, { payload, event: ev });
+    pending.resolve(payload.result);
+  }
+
+  hideAuthBanner();
+}
+
+function shortenResult(r) {
+  if (!r) return '(empty)';
+  if (typeof r !== 'string') r = JSON.stringify(r);
+  return r.length > 80 ? r.slice(0,80) + '…' : r;
+}
+
+// ============================================================
+// AUTH BANNER
+// ============================================================
+function showAuthBanner(url) {
+  const host = $('auth-banner-host');
+  host.innerHTML = `
+    <div class="auth-banner">
+      <h3>⚡ auth challenge</h3>
+      <p>The remote signer requires user approval. Open the URL below to authenticate:</p>
+      <p><a href="${escapeHTML(url)}" target="_blank" rel="noopener">${escapeHTML(url)}</a></p>
+      <div class="btn-row">
+        <button class="ghost" onclick="window.open('${url.replace(/'/g, "\\'")}','_blank')">open in new tab</button>
+        <button class="ghost" id="btn-dismiss-auth">dismiss</button>
+      </div>
+    </div>
+  `;
+  $('btn-dismiss-auth').onclick = hideAuthBanner;
+}
+function hideAuthBanner() { $('auth-banner-host').innerHTML = ''; }
+
+// ============================================================
+// CONNECTION FLOWS
+// ============================================================
+
+// --- Tabs (left col)
+$$('.tabs .tab').forEach(t => {
+  t.onclick = () => {
+    $$('.tabs .tab').forEach(x => x.classList.remove('active'));
+    $$('.panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelector(`.panel[data-panel="${t.dataset.tab}"]`).classList.add('active');
+  };
+});
+
+// --- bunker:// flow
+$('btn-bunker-paste').onclick = async () => {
+  try { $('bunker-uri').value = await navigator.clipboard.readText(); }
+  catch { toast('paste blocked', true); }
+};
+
+$('btn-bunker-connect').onclick = async () => {
+  const uri = $('bunker-uri').value.trim();
+  if (!uri.startsWith('bunker://')) { toast('invalid bunker URI', true); return; }
+
+  let parsed;
+  try { parsed = parseBunkerUri(uri); }
+  catch (e) { toast(e.message, true); return; }
+
+  // local key
+  let localSk;
+  const skInput = $('bunker-local-sk').value.trim();
+  if (skInput) {
+    try {
+      if (skInput.startsWith('nsec')) {
+        const dec = nip19.decode(skInput);
+        localSk = dec.data;
+      } else {
+        localSk = fromHex(skInput);
+        if (localSk.length !== 32) throw new Error('hex must be 64 chars');
+      }
+    } catch (e) { toast('invalid local key: ' + e.message, true); return; }
+  } else {
+    localSk = nt.generateSecretKey();
+  }
+  state.localSk = localSk;
+  state.localPk = nt.getPublicKey(localSk);
+  state.remoteSignerPk = parsed.pubkey;
+  state.bunkerSecret = parsed.secret;
+  state.encMode = 'nip04'; // start with nip04 (most compat), auto-upgrade if signer responds with nip44
+
+  log('sys', `bunker session init · signer=${shorten(parsed.pubkey,6)} · ${parsed.relays.length} relay(s)`);
+
+  // connect relays
+  for (const r of parsed.relays) await addRelay(r);
+  for (const url of state.relays.keys()) subscribeRelay(url);
+
+  updateStatus();
+
+  // send connect
+  const perms = $('bunker-perms').value.trim();
+  const params = [parsed.pubkey];
+  if (parsed.secret) params.push(parsed.secret);
+  else params.push('');
+  if (perms) params.push(perms);
+
+  try {
+    const res = await sendRequest('connect', params, {
+      timeout: 120000,
+      onAuth: (url) => log('auth', `awaiting auth at ${url}`),
+    });
+    log('sys', `connect → ${escapeHTML(res)}`);
+    toast('connected!');
+    // immediately fetch user pubkey per spec
+    await fetchUserPubkey();
+  } catch (e) {
+    log('err', `connect failed: ${e.message}`);
+    toast('connect failed: ' + e.message, true);
+  }
+};
+
+function parseBunkerUri(uri) {
+  const u = new URL(uri);
+  // protocol "bunker:" — host is the pubkey
+  const pubkey = (u.hostname || u.pathname.replace(/^\/+/, '')).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(pubkey)) throw new Error('invalid signer pubkey in bunker URI');
+  const relays = u.searchParams.getAll('relay');
+  const secret = u.searchParams.get('secret') || null;
+  if (relays.length === 0) throw new Error('bunker URI missing relay');
+  return { pubkey, relays, secret };
+}
+
+async function fetchUserPubkey() {
+  try {
+    const r = await sendRequest('get_public_key', []);
+    if (r && /^[0-9a-f]{64}$/.test(r)) {
+      state.userPk = r;
+      log('sys', `user pubkey: <code>${r}</code>`);
+      updateStatus();
+    }
+  } catch (e) {
+    log('err', `get_public_key failed: ${e.message}`);
+  }
+}
+
+// --- nostrconnect:// flow
+$('btn-nc-generate').onclick = async () => {
+  // create local key
+  const sk = nt.generateSecretKey();
+  state.localSk = sk;
+  state.localPk = nt.getPublicKey(sk);
+  state.encMode = 'nip04';
+
+  const relays = $('nc-relays').value.split(/\s+/).map(s => s.trim()).filter(Boolean);
+  if (relays.length === 0) { toast('add at least one relay', true); return; }
+
+  const secret = rid();
+  state.bunkerSecret = secret;
+
+  const params = new URLSearchParams();
+  for (const r of relays) params.append('relay', r);
+  params.set('secret', secret);
+  const perms = $('nc-perms').value.trim();
+  if (perms) params.set('perms', perms);
+  const name = $('nc-name').value.trim();
+  if (name) params.set('name', name);
+  const url = $('nc-url').value.trim();
+  if (url) params.set('url', url);
+
+  const uri = `nostrconnect://${state.localPk}?${params.toString()}`;
+  $('nc-uri-out').value = uri;
+  $('nc-output').style.display = 'block';
+
+  // QR
+  const qrHost = $('nc-qr');
+  qrHost.innerHTML = '';
+  try {
+    const dataUrl = await QRCode.toDataURL(uri, { margin: 1, width: 220 });
+    const img = document.createElement('img');
+    img.src = dataUrl; img.width = 220; img.height = 220;
+    qrHost.appendChild(img);
+  } catch (e) { qrHost.textContent = 'QR generation failed'; }
+
+  // connect relays + listen
+  for (const r of relays) await addRelay(r);
+  for (const u of state.relays.keys()) subscribeRelay(u);
+
+  state.ncAbort = { active: true };
+  $('btn-nc-cancel').disabled = false;
+  $('nc-status').textContent = 'Listening for connect from signer…';
+  log('sys', `generated nostrconnect URI · waiting for signer`);
+  updateStatus();
+};
+
+$('btn-nc-cancel').onclick = () => {
+  state.ncAbort = null;
+  $('btn-nc-cancel').disabled = true;
+  $('nc-status').textContent = 'Cancelled.';
+};
+
+$('btn-nc-copy').onclick = () => copy($('nc-uri-out').value);
+
+async function handleNostrConnectResponse(ev, payload) {
+  // Validate secret
+  if (state.bunkerSecret && payload.result !== state.bunkerSecret && payload.result !== 'ack') {
+    log('err', `nostrconnect: secret mismatch (got "${payload.result}")`, { expected: state.bunkerSecret, got: payload.result });
+    return;
+  }
+  state.remoteSignerPk = ev.pubkey;
+  state.ncAbort = null;
+  $('btn-nc-cancel').disabled = true;
+  $('nc-status').textContent = `Connected! Signer: ${shorten(ev.pubkey, 8)}`;
+  log('res', `← <code>connect</code> from signer ${shorten(ev.pubkey,8)} · ${escapeHTML(payload.result)}`, { payload, event: ev });
+  toast('signer connected!');
+  updateStatus();
+  // fetch user pk per spec
+  await fetchUserPubkey();
+}
+
+// --- disconnect
+function disconnect() {
+  for (const url of [...state.relays.keys()]) disconnectRelay(url);
+  state.localSk = null;
+  state.localPk = null;
+  state.remoteSignerPk = null;
+  state.userPk = null;
+  state.pending.clear();
+  state.bunkerSecret = null;
+  log('sys', 'session ended');
+  updateStatus();
+  toast('disconnected');
+}
+
+// ============================================================
+// METHOD HANDLERS
+// ============================================================
+
+// Toggle method bodies
+$$('.method-head').forEach(h => {
+  h.onclick = () => h.parentElement.classList.toggle('open');
+});
+// expand sign_event by default
+document.querySelector('.method[data-method="sign_event"]').classList.add('open');
+
+// Fill self pubkey buttons
+$$('[data-fill-self]').forEach(b => {
+  b.onclick = () => {
+    if (!state.userPk) { toast('not connected', true); return; }
+    $(b.dataset.fillSelf).value = state.userPk;
+  };
+});
+
+function setResult(method, ok, data) {
+  const host = $('r-' + method);
+  if (!host) return;
+  const colour = ok ? 'var(--accent)' : 'var(--accent-2)';
+  const display = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  host.innerHTML = `
+    <div class="card" style="border-color:${colour}">
+      <div class="label-mini" style="color:${colour}; font-size:9px; text-transform:uppercase; letter-spacing:.12em; margin-bottom:6px;">${ok ? 'result' : 'error'}</div>
+      <pre style="margin:0; white-space:pre-wrap; word-break:break-all; font-size:11px; color:var(--ink); max-height:240px; overflow:auto;">${escapeHTML(display)}</pre>
+      <div class="btn-row">
+        <button class="ghost" onclick="navigator.clipboard.writeText(${JSON.stringify(display)}).then(()=>window.__nip46_toast?.('copied'))">copy</button>
+      </div>
+    </div>
+  `;
+}
+window.__nip46_toast = toast;
+
+document.querySelectorAll('[data-call]').forEach(btn => {
+  btn.onclick = async () => {
+    const method = btn.dataset.call;
+    if (!state.localSk) { toast('connect first', true); return; }
+    btn.disabled = true;
+    try {
+      let result;
+      if (method === 'ping') {
+        result = await sendRequest('ping', []);
+      }
+      else if (method === 'get_public_key') {
+        result = await sendRequest('get_public_key', []);
+        if (/^[0-9a-f]{64}$/.test(result)) state.userPk = result;
+        updateStatus();
+      }
+      else if (method === 'sign_event') {
+        const tplKind = parseInt($('se-kind').value);
+        const tplCreated = $('se-created').value.trim();
+        const tplContent = $('se-content').value;
+        let tplTags;
+        try { tplTags = JSON.parse($('se-tags').value); }
+        catch { throw new Error('invalid tags JSON'); }
+        const tpl = {
+          kind: tplKind,
+          content: tplContent,
+          tags: tplTags,
+          created_at: tplCreated ? parseInt(tplCreated) : nowSec(),
+        };
+        result = await sendRequest('sign_event', [JSON.stringify(tpl)]);
+        try {
+          const signed = JSON.parse(result);
+          state.lastSignedEvent = signed;
+          $('btn-publish-signed').disabled = false;
+        } catch {}
+      }
+      else if (method === 'switch_relays') {
+        result = await sendRequest('switch_relays', []);
+      }
+      else if (method === 'nip04_encrypt') {
+        result = await sendRequest('nip04_encrypt', [$('n4e-pub').value.trim(), $('n4e-text').value]);
+        // auto-fill decrypt
+        $('n4d-pub').value = state.userPk || '';
+        $('n4d-text').value = result;
+      }
+      else if (method === 'nip04_decrypt') {
+        result = await sendRequest('nip04_decrypt', [$('n4d-pub').value.trim(), $('n4d-text').value.trim()]);
+      }
+      else if (method === 'nip44_encrypt') {
+        result = await sendRequest('nip44_encrypt', [$('n44e-pub').value.trim(), $('n44e-text').value]);
+        $('n44d-pub').value = state.userPk || '';
+        $('n44d-text').value = result;
+      }
+      else if (method === 'nip44_decrypt') {
+        result = await sendRequest('nip44_decrypt', [$('n44d-pub').value.trim(), $('n44d-text').value.trim()]);
+      }
+      else if (method === 'raw') {
+        const m = $('raw-method').value.trim();
+        if (!m) throw new Error('method required');
+        const p = JSON.parse($('raw-params').value || '[]');
+        if (!Array.isArray(p)) throw new Error('params must be array');
+        result = await sendRequest(m, p);
+      }
+      setResult(method, true, result);
+    } catch (e) {
+      setResult(method, false, e.message);
+      toast(e.message, true);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+});
+
+// publish signed event
+$('btn-publish-signed').onclick = async () => {
+  if (!state.lastSignedEvent) return;
+  const ev = state.lastSignedEvent;
+  const targets = ['wss://relay.damus.io', 'wss://relay.nostr.band', 'wss://nos.lol'];
+  log('sys', `publishing signed event ${ev.id?.slice(0,8)}… to ${targets.length} relays`);
+  let ok = 0;
+  for (const url of targets) {
+    try {
+      const r = await Relay.connect(url);
+      await r.publish(ev);
+      r.close();
+      ok++;
+    } catch (e) {
+      log('err', `publish to ${url} failed: ${e.message}`);
+    }
+  }
+  toast(`published to ${ok}/${targets.length} relays`);
+};
+
+// ============================================================
+// RELIABILITY: network state, page visibility, suspension, heartbeat
+// ============================================================
+
+// --- network online/offline
+window.addEventListener('online', () => {
+  state.online = true;
+  log('sys', `🌐 network <code>online</code>`);
+  toast('network online');
+  updateReliabilityUI();
+  // try reconnecting any dropped relays
+  reconnectAll();
+});
+
+window.addEventListener('offline', () => {
+  state.online = false;
+  log('err', `🌐 network <code>offline</code>`);
+  toast('network offline', true);
+  updateReliabilityUI();
+});
+
+// --- Network Information API (where supported — Chrome/Edge)
+if (navigator.connection) {
+  const c = navigator.connection;
+  const describeConn = () => {
+    const parts = [];
+    if (c.effectiveType) parts.push(c.effectiveType);
+    if (typeof c.downlink === 'number') parts.push(`${c.downlink}Mb/s`);
+    if (typeof c.rtt === 'number') parts.push(`${c.rtt}ms rtt`);
+    if (c.saveData) parts.push('save-data');
+    return parts.join(' · ') || '(no info)';
+  };
+  log('sys', `🌐 connection: <code>${describeConn()}</code>`);
+  c.addEventListener('change', () => {
+    log('sys', `🌐 connection changed: <code>${describeConn()}</code>`);
+    // a network type change (wifi→cellular, etc.) often kills sockets — verify
+    setTimeout(() => reconnectAll(), 500);
+  });
+}
+
+// --- Page Visibility API — proxy for tab suspension
+document.addEventListener('visibilitychange', () => {
+  const visible = !document.hidden;
+  state.visible = visible;
+  if (visible) {
+    const gap = Date.now() - state.lastActivity;
+    if (gap > 60000) {
+      log('sys', `👁 page <code>visible</code> after ${(gap/1000).toFixed(0)}s — likely suspended`);
+      // stale relays after long sleep; force reconnect
+      verifyAllRelays();
+    } else {
+      log('sys', `👁 page <code>visible</code> (${(gap/1000).toFixed(1)}s away)`);
+    }
+  } else {
+    log('sys', `👁 page <code>hidden</code> — may be throttled or suspended`);
+  }
+  state.lastActivity = Date.now();
+  updateReliabilityUI();
+});
+
+// --- pagehide / pageshow — actual bfcache freeze/thaw (real suspension on mobile)
+window.addEventListener('pagehide', (e) => {
+  log('sys', `💤 pagehide · persisted=${e.persisted} (entering bfcache or unloading)`);
+});
+
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) {
+    log('sys', `⚡ pageshow · restored from bfcache — sockets are dead, reconnecting all`);
+    // bfcache restore ALWAYS kills WebSockets; force reconnect
+    forceReconnectAll();
+  }
+});
+
+// --- focus/blur (less reliable but good context)
+window.addEventListener('focus', () => { state.lastActivity = Date.now(); });
+window.addEventListener('blur', () => {});
+
+// --- Detect suspension via wall-clock skip (works even if visibility doesn't fire)
+// Frequent timers get throttled when hidden, so a big gap = suspension
+let lastTick = Date.now();
+setInterval(() => {
+  const now = Date.now();
+  const drift = now - lastTick - 5000;
+  if (drift > 30000) {
+    log('sys', `⏱ time skip detected: ${(drift/1000).toFixed(0)}s — host suspended the tab`);
+    verifyAllRelays();
+  }
+  lastTick = now;
+  state.lastActivity = now;
+}, 5000);
+
+// --- Heartbeat: periodic ping while connected to detect silent dead sockets
+function startHeartbeat() {
+  stopHeartbeat();
+  if (!state.heartbeat.enabled) return;
+  state.heartbeat.timer = setInterval(async () => {
+    if (!state.localSk || !state.remoteSignerPk) return;
+    if (!state.online) return;
+    if (document.hidden) return;  // don't ping while throttled
+    const connectedRelays = [...state.relays.values()].filter(r => r.status === 'connected').length;
+    if (connectedRelays === 0) return;
+    try {
+      const res = await sendRequest('ping', [], { timeout: 15000, silent: true });
+      state.heartbeat.lastOk = Date.now();
+      state.heartbeat.misses = 0;
+    } catch (e) {
+      state.heartbeat.misses++;
+      log('err', `♡ heartbeat miss #${state.heartbeat.misses}: ${e.message}`);
+      if (state.heartbeat.misses >= 2) {
+        log('err', `♡ heartbeat: signer silent — reconnecting relays`);
+        forceReconnectAll();
+        state.heartbeat.misses = 0;
+      }
+    }
+  }, state.heartbeat.intervalMs);
+}
+function stopHeartbeat() {
+  if (state.heartbeat.timer) { clearInterval(state.heartbeat.timer); state.heartbeat.timer = null; }
+}
+
+// --- helpers
+function verifyAllRelays() {
+  // After a suspension/visibility change, sockets may be silently dead.
+  // Quickest way to verify is to close+reconnect anything not in clean 'connected' state,
+  // but we should also probe alive ones via heartbeat.
+  for (const [url, entry] of state.relays) {
+    if (entry.status !== 'connected' || !entry.relay) {
+      addRelay(url, { fromReconnect: true, silent: true });
+    }
+  }
+  // Trigger an immediate heartbeat to validate live ones
+  if (state.localSk && state.remoteSignerPk) {
+    sendRequest('ping', [], { timeout: 10000, silent: true })
+      .then(() => log('sys', `♡ post-resume ping ok`))
+      .catch(e => {
+        log('err', `♡ post-resume ping failed: ${e.message} — forcing reconnect`);
+        forceReconnectAll();
+      });
+  }
+}
+
+function forceReconnectAll() {
+  for (const [url, entry] of state.relays) {
+    try { if (entry.relay) entry.relay.onclose = null; } catch {}
+    try { entry.sub?.close(); } catch {}
+    try { entry.relay?.close(); } catch {}
+    entry.relay = null;
+    entry.sub = null;
+    entry.status = 'disconnected';
+    state.reconnect.attempts.delete(url);
+    addRelay(url, { fromReconnect: true, silent: true });
+  }
+  updateStatus();
+}
+
+function updateReliabilityUI() {
+  const el = $('net-status');
+  if (!el) return;
+  const bits = [];
+  bits.push(`<span class="${state.online ? 'on' : 'off'}">${state.online ? '● online' : '○ offline'}</span>`);
+  bits.push(`<span>${state.visible ? '👁 visible' : '💤 hidden'}</span>`);
+  if (navigator.connection?.effectiveType) bits.push(`<span>${navigator.connection.effectiveType}</span>`);
+  el.innerHTML = bits.join(' · ');
+}
+
+// ============================================================
+// INIT
+// ============================================================
+updateStatus();
+updateReliabilityUI();
+startHeartbeat();
+log('sys', `nip-46 lab ready · network=<code>${state.online ? 'online' : 'offline'}</code> · visibility=<code>${state.visible ? 'visible' : 'hidden'}</code>`);
+log('sys', `open dev console for state: <code>__nip46</code>`);
+
+
+</script>
+</body>
+</html>
