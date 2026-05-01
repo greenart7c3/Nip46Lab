@@ -4,7 +4,17 @@ A complete browser-based testbench for [NIP-46](https://github.com/nostr-protoco
 
 ![screenshot](docs/screenshot.png)
 
+## Three modes
+
+Toggle in the top header:
+
+- **client** — connect to an existing bunker as a remote-signing app
+- **bunker** — act as a remote signer yourself; expose a `bunker://` URI or dial out to a `nostrconnect://` client
+- **relay test** — diagnostic tool for nostr relays (NIP-11, AUTH, ephemeral kinds, NIP-46 echo)
+
 ## Features
+
+### Client mode
 
 **Both connection flows**
 - `bunker://` (signer-initiated) — paste a URI from nsec.app, nsecBunker, Amber, etc.
@@ -29,6 +39,36 @@ A complete browser-based testbench for [NIP-46](https://github.com/nostr-protoco
 - Network-type changes trigger a verification pass (wifi → cellular often kills sockets silently)
 
 **Sign and publish** — after `sign_event`, one click publishes the signed event to damus / nostr.band / nos.lol so you can verify it propagated.
+
+### Bunker mode
+
+Run NIP-46 Lab as the remote signer itself — useful for testing your own client app, demoing the protocol, or short-lived signing sessions in a browser tab.
+
+- **Identity** — paste an `nsec` / hex secret key, or generate an ephemeral one
+- **Listen on relays** — multiple relays in parallel, with auto-reconnect on drop
+- **Generate `bunker://` URI** — pubkey + relays + rotatable secret + QR code, ready for any client
+- **Dial out via `nostrconnect://`** — paste a client URI and the bunker connects to it
+- **Approval gate** — auto-approve all (test mode) or manually approve / reject every request
+- **Per-client tracking** — sees connected clients, granted permissions, encryption mode, request counts
+- **Encryption auto-detect** — replies in NIP-04 or NIP-44 depending on what the client sent
+- **All 8 RPC methods implemented** — `connect`, `ping`, `get_public_key`, `sign_event`, `nip04_encrypt/decrypt`, `nip44_encrypt/decrypt`, `switch_relays`
+- **Stats panel** — live counters for requests, signatures, encryptions, decryptions, rejections
+
+⚠️ Browser-tab signing keys live in memory only — do not paste production `nsec`s into any web app you don't fully trust. The bunker mode is for testing.
+
+### Relay test mode
+
+A focused diagnostic tool for any nostr relay, with NIP-46-relevant checks:
+
+- **NIP-11 info document** — fetches `application/nostr+json` over HTTPS, surfaces name / software / version / supported NIPs
+- **WebSocket connect** — measures handshake latency
+- **Publish + readback** — sends an ephemeral kind 20000 event, waits for `OK` accept
+- **Subscription latency** — measures time-to-EOSE for a kind 1 query
+- **NIP-46 kind 24133 echo** — subscribes + publishes an ephemeral kind 24133 to itself; many relays drop ephemeral 2xxxx kinds, this catches them
+- **NIP-42 AUTH detection** — reports whether the relay challenges with `AUTH`
+- **Raw protocol trace** — every frame in/out, copyable
+
+Quick presets are included for damus, nostr.band, nos.lol, nsec.app, nostr.mom.
 
 ## Usage
 
