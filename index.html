@@ -682,7 +682,7 @@ wss://relay.nostr.band</textarea>
       <div class="btn-row" style="margin-top:0">
         <button class="ghost" id="btn-enc-nip04">NIP-04</button>
         <button class="ghost" id="btn-enc-nip44">NIP-44</button>
-        <span class="hint" style="align-self:center;margin:0 0 0 8px">current: <code id="enc-mode-display">nip04</code></span>
+        <span class="hint" style="align-self:center;margin:0 0 0 8px">current: <code id="enc-mode-display">nip44</code></span>
       </div>
 
       <h2>Relays</h2>
@@ -920,7 +920,7 @@ wss://relay.nostr.band</textarea>
           <dl class="kv">
             <dt>user pk</dt><dd class="copyable" id="bk-user-pk-display"></dd>
             <dt>user npub</dt><dd class="copyable" id="bk-user-npub-display"></dd>
-            <dt>encryption</dt><dd id="bk-enc-display">nip04</dd>
+            <dt>encryption</dt><dd id="bk-enc-display">nip44</dd>
           </dl>
         </div>
       </div>
@@ -1105,7 +1105,7 @@ const state = {
   relays: new Map(),     // url -> { relay, status }
   pending: new Map(),    // request_id -> { resolve, reject, method, expectedSecret? }
   bunkerSecret: null,    // for nostrconnect:// validation
-  encMode: 'nip04',      // detected encryption mode for transport — start with nip04 (most compatible), auto-upgrade on first inbound
+  encMode: 'nip44',      // detected encryption mode for transport — start with nip44 (modern default), auto-detect on first inbound
   lastSignedEvent: null,
   ncAbort: null,
   // reliability
@@ -1472,12 +1472,12 @@ $('cb-heartbeat').onchange = (e) => {
 // ENCRYPTION (auto-detect: nip04 or nip44; auto-upgrade on inbound)
 // ============================================================
 async function encryptOutTo(plaintext, peerPk) {
-  if (state.encMode === 'nip44') {
-    const conv = nip44.utils.getConversationKey(state.localSk, peerPk);
-    return nip44.encrypt(plaintext, conv);
+  if (state.encMode === 'nip04') {
+    return await nip04.encrypt(state.localSk, peerPk, plaintext);
   }
-  // default nip04 — most widely supported by deployed bunkers
-  return await nip04.encrypt(state.localSk, peerPk, plaintext);
+  // default nip44 — modern, authenticated encryption
+  const conv = nip44.utils.getConversationKey(state.localSk, peerPk);
+  return nip44.encrypt(plaintext, conv);
 }
 
 async function decryptIn(ciphertext, fromPk) {
@@ -1691,7 +1691,7 @@ $('btn-bunker-connect').onclick = async () => {
   state.localPk = nt.getPublicKey(localSk);
   state.remoteSignerPk = parsed.pubkey;
   state.bunkerSecret = parsed.secret;
-  state.encMode = 'nip04'; // start with nip04 (most compat), auto-upgrade if signer responds with nip44
+  state.encMode = 'nip44'; // start with nip44 (modern default), auto-detect if signer responds with nip04
 
   log('sys', `bunker session init · signer=${shorten(parsed.pubkey,6)} · ${parsed.relays.length} relay(s)`);
 
@@ -1753,7 +1753,7 @@ $('btn-nc-generate').onclick = async () => {
   const sk = nt.generateSecretKey();
   state.localSk = sk;
   state.localPk = nt.getPublicKey(sk);
-  state.encMode = 'nip04';
+  state.encMode = 'nip44';
 
   const relays = $('nc-relays').value.split(/\s+/).map(s => s.trim()).filter(Boolean);
   if (relays.length === 0) { toast('add at least one relay', true); return; }
@@ -2159,7 +2159,7 @@ const bunker = {
   pendingApprovals: [],
   secret: null,
   listening: false,
-  encMode: 'nip04',
+  encMode: 'nip44',
   autoApprove: true,
   stats: { requests: 0, signed: 0, encrypted: 0, decrypted: 0, rejected: 0 },
   seenEventIds: new Set(),
@@ -2370,11 +2370,11 @@ $('btn-bk-stop').onclick = () => {
 
 // ---- Encryption
 async function bkEncrypt(plaintext, peerPk, mode) {
-  if (mode === 'nip44') {
-    const conv = nip44.utils.getConversationKey(bunker.userSk, peerPk);
-    return nip44.encrypt(plaintext, conv);
+  if (mode === 'nip04') {
+    return await nip04.encrypt(bunker.userSk, peerPk, plaintext);
   }
-  return await nip04.encrypt(bunker.userSk, peerPk, plaintext);
+  const conv = nip44.utils.getConversationKey(bunker.userSk, peerPk);
+  return nip44.encrypt(plaintext, conv);
 }
 
 async function bkDecrypt(ciphertext, fromPk) {
@@ -2656,13 +2656,13 @@ $('btn-bk-dial').onclick = async () => {
 
   let client = bunker.clients.get(parsed.clientPk);
   if (!client) {
-    client = { firstSeen: Date.now(), lastSeen: Date.now(), perms: '', encMode: 'nip04', requests: 0, connected: false };
+    client = { firstSeen: Date.now(), lastSeen: Date.now(), perms: '', encMode: 'nip44', requests: 0, connected: false };
     bunker.clients.set(parsed.clientPk, client);
   }
   client.ncSecret = parsed.secret;
   bkRenderClients();
 
-  const encMode = 'nip04';
+  const encMode = 'nip44';
   const id = rid();
   const payload = { id, result: parsed.secret };
   const cipher = await bkEncrypt(JSON.stringify(payload), parsed.clientPk, encMode);
