@@ -1032,53 +1032,27 @@ wss://relay.nostr.band</textarea>
   <!-- LEFT: test config -->
   <section class="col">
     <div class="col-pad">
-      <h2>Relay Tester</h2>
-      <div class="sub">Diagnostic tool for nostr relays</div>
+      <h2>Bunker Relay Tester</h2>
+      <div class="sub">Does this relay support NIP-46 bunker traffic?</div>
 
       <label>Relay URL</label>
       <input id="rt-url" placeholder="wss://relay.example.com" value="wss://relay.nsec.app" />
 
-      <label>Tests to run</label>
-      <div class="card" style="padding:10px 12px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-          <input type="checkbox" id="rt-t-nip11" checked style="width:auto;margin:0">
-          <label for="rt-t-nip11" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink)">NIP-11 info document (HTTPS)</label>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-          <input type="checkbox" id="rt-t-connect" checked style="width:auto;margin:0">
-          <label for="rt-t-connect" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink)">WebSocket connect (handshake time)</label>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-          <input type="checkbox" id="rt-t-publish" checked style="width:auto;margin:0">
-          <label for="rt-t-publish" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink)">publish ephemeral event &amp; readback</label>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-          <input type="checkbox" id="rt-t-sub" checked style="width:auto;margin:0">
-          <label for="rt-t-sub" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink)">subscription &amp; EOSE latency</label>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-          <input type="checkbox" id="rt-t-24133" checked style="width:auto;margin:0">
-          <label for="rt-t-24133" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink)">NIP-46 kind 24133 echo</label>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-          <input type="checkbox" id="rt-t-auth" checked style="width:auto;margin:0">
-          <label for="rt-t-auth" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink)">NIP-42 AUTH challenge detection</label>
-        </div>
-      </div>
-
       <div class="btn-row">
-        <button id="btn-rt-run">run tests</button>
+        <button id="btn-rt-run">run bunker check</button>
         <button class="ghost" id="btn-rt-clear">clear</button>
       </div>
 
-      <p class="hint">All tests use ephemeral keys. The publish test uses kind 20000 (ephemeral) so nothing is persisted on the relay.</p>
+      <p class="hint">Runs every check needed for NIP-46 traffic to flow:
+        WebSocket reachability, kind 24133 acceptance, <code>#p</code>-tag forwarding for ephemeral events,
+        and a full encrypted client↔bunker round-trip. All checks use ephemeral keypairs.</p>
 
       <h2>Quick presets</h2>
       <div class="btn-row">
+        <button class="ghost" data-rt-preset="wss://relay.nsec.app">nsec.app</button>
         <button class="ghost" data-rt-preset="wss://relay.damus.io">damus</button>
         <button class="ghost" data-rt-preset="wss://relay.nostr.band">nostr.band</button>
         <button class="ghost" data-rt-preset="wss://nos.lol">nos.lol</button>
-        <button class="ghost" data-rt-preset="wss://relay.nsec.app">nsec.app</button>
         <button class="ghost" data-rt-preset="wss://nostr.mom">nostr.mom</button>
       </div>
     </div>
@@ -1087,16 +1061,16 @@ wss://relay.nostr.band</textarea>
   <!-- MIDDLE+RIGHT: results -->
   <section class="col" style="grid-column: span 2;">
     <div class="col-pad">
-      <h2>Test Results</h2>
-      <div class="sub">Click any row to expand details</div>
-
-      <div id="rt-results">
-        <p class="empty">No tests run yet.</p>
+      <h2>Verdict</h2>
+      <div class="sub">Will NIP-46 work over this relay?</div>
+      <div id="rt-verdict" class="nip11-box">
+        <p class="empty" style="margin:0">Run the check to evaluate this relay.</p>
       </div>
 
-      <h2>NIP-11 document</h2>
-      <div id="rt-nip11" class="nip11-box">
-        <p class="empty" style="margin:0">Run tests to fetch NIP-11 info.</p>
+      <h2>Checks</h2>
+      <div class="sub">All four are required for bunker traffic</div>
+      <div id="rt-results">
+        <p class="empty">No checks run yet.</p>
       </div>
 
       <h2>Trace</h2>
@@ -2713,9 +2687,22 @@ $$('[data-rt-preset]').forEach(b => {
   b.onclick = () => { $('rt-url').value = b.dataset.rtPreset; };
 });
 
+function rtSetVerdict(state, msg) {
+  const host = $('rt-verdict');
+  let colour = 'var(--ink-dim)';
+  let label = 'unknown';
+  if (state === 'pass') { colour = 'var(--accent)'; label = 'supports bunker'; }
+  else if (state === 'fail') { colour = 'var(--accent-2)'; label = 'will not work as bunker relay'; }
+  else if (state === 'running') { colour = 'var(--accent-4)'; label = 'checking…'; }
+  host.innerHTML = `
+    <div style="color:${colour};font-family:var(--serif);font-size:18px;font-weight:600">${label}</div>
+    <div style="color:var(--ink-dim);font-size:11px;margin-top:4px">${escapeHTML(msg)}</div>
+  `;
+}
+
 $('btn-rt-clear').onclick = () => {
-  $('rt-results').innerHTML = '<p class="empty">No tests run yet.</p>';
-  $('rt-nip11').innerHTML = '<p class="empty" style="margin:0">Run tests to fetch NIP-11 info.</p>';
+  $('rt-results').innerHTML = '<p class="empty">No checks run yet.</p>';
+  $('rt-verdict').innerHTML = '<p class="empty" style="margin:0">Run the check to evaluate this relay.</p>';
   tester.trace = [];
   $('rt-trace-pre').textContent = '';
 };
@@ -2727,53 +2714,47 @@ $('btn-rt-run').onclick = async () => {
   $('rt-results').innerHTML = '';
   tester.trace = [];
   $('rt-trace-pre').textContent = '';
-  rtTrace(`▶ relay tester running on ${url}`);
+  rtTrace(`▶ bunker relay check on ${url}`);
+  rtSetVerdict('running', url);
+
+  // pre-register checks so they show as pending in order
+  rtSetTest('connect', '1 · WebSocket reachable',     'pending', '');
+  rtSetTest('accept',  '2 · accepts kind 24133',      'pending', '');
+  rtSetTest('forward', '3 · forwards 24133 by #p tag','pending', '');
+  rtSetTest('rpc',     '4 · full encrypted RPC round-trip', 'pending', '');
 
   $('btn-rt-run').disabled = true;
+  const results = {};
   try {
-    if ($('rt-t-nip11').checked)   await rtTestNip11(url);
-    if ($('rt-t-connect').checked) await rtTestConnect(url);
-    if ($('rt-t-publish').checked) await rtTestPublish(url);
-    if ($('rt-t-sub').checked)     await rtTestSub(url);
-    if ($('rt-t-24133').checked)   await rtTest24133(url);
-    if ($('rt-t-auth').checked)    await rtTestAuth(url);
+    results.connect = await rtCheckConnect(url);
+    if (!results.connect) { rtFinishVerdict(results); return; }
+
+    results.accept = await rtCheckAccept(url);
+    results.forward = await rtCheckForward(url);
+    if (results.connect && results.accept && results.forward) {
+      results.rpc = await rtCheckRpc(url);
+    } else {
+      rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'fail', 'skipped — earlier check failed');
+      results.rpc = false;
+    }
+    rtFinishVerdict(results);
   } finally {
     $('btn-rt-run').disabled = false;
     rtTrace(`■ done`);
   }
 };
 
-async function rtTestNip11(url) {
-  rtSetTest('nip11', 'NIP-11 info', 'running', 'fetching…');
-  const httpUrl = url.replace(/^ws/, 'http');
-  const t0 = performance.now();
-  try {
-    const res = await fetch(httpUrl, { headers: { Accept: 'application/nostr+json' } });
-    const dt = (performance.now() - t0).toFixed(0);
-    const body = await res.text();
-    rtTrace(`GET ${httpUrl} → ${res.status} (${dt}ms)`);
-    if (!res.ok) {
-      rtSetTest('nip11', 'NIP-11 info', 'fail', `${res.status} (${dt}ms)`);
-      $('rt-nip11').innerHTML = `<p style="color:var(--accent-2);margin:0">HTTP ${res.status}</p>`;
-      return;
-    }
-    let json;
-    try { json = JSON.parse(body); } catch {
-      rtSetTest('nip11', 'NIP-11 info', 'fail', `not JSON (${dt}ms)`);
-      $('rt-nip11').innerHTML = `<p style="color:var(--accent-2);margin:0">response was not JSON</p><pre>${escapeHTML(body.slice(0, 1000))}</pre>`;
-      return;
-    }
-    const supportedNips = (json.supported_nips || []).join(', ');
-    rtSetTest('nip11', 'NIP-11 info', 'pass', `${dt}ms · ${json.name || '(no name)'} · NIPs: ${supportedNips || 'n/a'}`);
-    $('rt-nip11').innerHTML = `
-      <div><strong>${escapeHTML(json.name || '(no name)')}</strong> · ${escapeHTML(json.software || '')} ${escapeHTML(json.version || '')}</div>
-      <div style="color:var(--ink-dim);margin-top:4px">${escapeHTML(json.description || '')}</div>
-      <pre>${escapeHTML(JSON.stringify(json, null, 2))}</pre>
-    `;
-  } catch (e) {
-    rtTrace(`GET ${httpUrl} failed: ${e.message}`);
-    rtSetTest('nip11', 'NIP-11 info', 'fail', e.message);
-    $('rt-nip11').innerHTML = `<p style="color:var(--accent-2);margin:0">${escapeHTML(e.message)}</p>`;
+function rtFinishVerdict(r) {
+  const allPass = r.connect && r.accept && r.forward && r.rpc;
+  if (allPass) {
+    rtSetVerdict('pass', 'kind 24133 is accepted, forwarded with #p filtering, and a full encrypted ping/pong completed end-to-end.');
+  } else {
+    const reasons = [];
+    if (!r.connect) reasons.push('WebSocket connect failed');
+    if (!r.accept)  reasons.push('relay rejected kind 24133');
+    if (!r.forward) reasons.push('relay did not forward kind 24133 with #p filter (likely strips ephemeral 2xxxx)');
+    if (!r.rpc)     reasons.push('end-to-end encrypted round-trip failed');
+    rtSetVerdict('fail', reasons.join(' · '));
   }
 }
 
@@ -2801,26 +2782,37 @@ function rtRawWs(url, onMessage) {
   });
 }
 
-async function rtTestConnect(url) {
-  rtSetTest('connect', 'WebSocket connect', 'running', '…');
+async function rtCheckConnect(url) {
+  rtSetTest('connect', '1 · WebSocket reachable', 'running', '…');
   try {
     const { ws, openMs } = await rtRawWs(url);
-    rtSetTest('connect', 'WebSocket connect', 'pass', `handshake ${openMs.toFixed(0)}ms`);
+    rtSetTest('connect', '1 · WebSocket reachable', 'pass', `handshake ${openMs.toFixed(0)}ms`);
     ws.close();
+    return true;
   } catch (e) {
-    rtSetTest('connect', 'WebSocket connect', 'fail', e.message);
+    rtSetTest('connect', '1 · WebSocket reachable', 'fail', e.message);
+    return false;
   }
 }
 
-async function rtTestPublish(url) {
-  rtSetTest('publish', 'publish + readback', 'running', '…');
-  const sk = nt.generateSecretKey();
-  const ev = nt.finalizeEvent({
-    kind: 20000,
+// Build a realistic encrypted kind 24133 event (NIP-04 cipher to a peer pubkey)
+async function rtMake24133(fromSk, toPk, payloadObj) {
+  const cipher = await nip04.encrypt(fromSk, toPk, JSON.stringify(payloadObj));
+  return nt.finalizeEvent({
+    kind: 24133,
     created_at: nowSec(),
-    tags: [['t', 'nip46lab-rtest']],
-    content: 'NIP-46 Lab relay test ' + Date.now(),
-  }, sk);
+    tags: [['p', toPk]],
+    content: cipher,
+  }, fromSk);
+}
+
+async function rtCheckAccept(url) {
+  rtSetTest('accept', '2 · accepts kind 24133', 'running', 'publishing realistic NIP-46 event…');
+  // realistic payload: encrypted JSON-RPC ping from one ephemeral key to another
+  const aSk = nt.generateSecretKey();
+  const bSk = nt.generateSecretKey();
+  const bPk = nt.getPublicKey(bSk);
+  const ev = await rtMake24133(aSk, bPk, { id: rid(), method: 'ping', params: [] });
 
   let ws, accepted = false, replied = false, msg = '';
   try {
@@ -2839,69 +2831,48 @@ async function rtTestPublish(url) {
     while (!replied && Date.now() - start < 5000) await new Promise(r => setTimeout(r, 50));
     const dt = (performance.now() - t0).toFixed(0);
 
-    if (!replied) rtSetTest('publish', 'publish + readback', 'fail', 'no OK reply within 5s');
-    else if (!accepted) rtSetTest('publish', 'publish + readback', 'fail', `OK false (${dt}ms): ${msg}`);
-    else rtSetTest('publish', 'publish + readback', 'pass', `accepted in ${dt}ms${msg ? ' · ' + msg : ''}`);
+    if (!replied) {
+      rtSetTest('accept', '2 · accepts kind 24133', 'fail', 'no OK reply within 5s');
+      ws.close(); return false;
+    }
+    if (!accepted) {
+      rtSetTest('accept', '2 · accepts kind 24133', 'fail', `relay rejected: ${msg || '(no reason)'} (${dt}ms)`);
+      ws.close(); return false;
+    }
+    rtSetTest('accept', '2 · accepts kind 24133', 'pass', `OK in ${dt}ms${msg ? ' · ' + msg : ''}`);
     ws.close();
+    return true;
   } catch (e) {
-    rtSetTest('publish', 'publish + readback', 'fail', e.message);
+    rtSetTest('accept', '2 · accepts kind 24133', 'fail', e.message);
     if (ws) try { ws.close(); } catch {}
+    return false;
   }
 }
 
-async function rtTestSub(url) {
-  rtSetTest('sub', 'subscription · EOSE', 'running', '…');
-  let ws, eose = false, eventCount = 0;
-  const subId = 'rt-' + rid().slice(0, 8);
-  try {
-    ({ ws } = await rtRawWs(url, (data) => {
-      try {
-        const arr = JSON.parse(data);
-        if (arr[0] === 'EVENT' && arr[1] === subId) eventCount++;
-        if (arr[0] === 'EOSE'  && arr[1] === subId) eose = true;
-      } catch {}
-    }));
-    const t0 = performance.now();
-    const req = JSON.stringify(['REQ', subId, { kinds: [1], limit: 5 }]);
-    rtTrace(`→ ${req}`);
-    ws.send(req);
-    const start = Date.now();
-    while (!eose && Date.now() - start < 8000) await new Promise(r => setTimeout(r, 50));
-    const dt = (performance.now() - t0).toFixed(0);
-    try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
-    if (!eose) rtSetTest('sub', 'subscription · EOSE', 'fail', `no EOSE in 8s · ${eventCount} events`);
-    else rtSetTest('sub', 'subscription · EOSE', 'pass', `EOSE in ${dt}ms · ${eventCount} events`);
-    ws.close();
-  } catch (e) {
-    rtSetTest('sub', 'subscription · EOSE', 'fail', e.message);
-    if (ws) try { ws.close(); } catch {}
-  }
-}
-
-async function rtTest24133(url) {
-  rtSetTest('k24133', 'NIP-46 kind 24133 echo', 'running', 'subscribe + publish to self…');
+async function rtCheckForward(url) {
+  rtSetTest('forward', '3 · forwards 24133 by #p tag', 'running', 'subscribe + publish to self…');
+  // Use ONE keypair as both signer and recipient (matches what bunker does — listens on its own pubkey)
   const sk = nt.generateSecretKey();
   const pk = nt.getPublicKey(sk);
-  const subId = 'rt-46-' + rid().slice(0, 8);
-  let ws, received = false;
+  const subId = 'rt-fwd-' + rid().slice(0, 8);
+  let ws, received = false, gotEose = false;
   try {
     ({ ws } = await rtRawWs(url, (data) => {
       try {
         const arr = JSON.parse(data);
+        if (arr[0] === 'EOSE'  && arr[1] === subId) gotEose = true;
         if (arr[0] === 'EVENT' && arr[1] === subId && arr[2]?.kind === 24133) received = true;
       } catch {}
     }));
-    const t0 = performance.now();
     const req = JSON.stringify(['REQ', subId, { kinds: [24133], '#p': [pk], since: nowSec() - 5 }]);
     rtTrace(`→ ${req}`);
     ws.send(req);
-    await new Promise(r => setTimeout(r, 300));
-    const ev = nt.finalizeEvent({
-      kind: 24133,
-      created_at: nowSec(),
-      tags: [['p', pk]],
-      content: 'rt-echo',
-    }, sk);
+    // wait for EOSE so the sub is definitely live before publishing
+    const eoseStart = Date.now();
+    while (!gotEose && Date.now() - eoseStart < 3000) await new Promise(r => setTimeout(r, 50));
+    const t0 = performance.now();
+    // realistic encrypted self-targeted 24133
+    const ev = await rtMake24133(sk, pk, { id: rid(), method: 'ping', params: [] });
     const send = JSON.stringify(['EVENT', ev]);
     rtTrace(`→ ${send.length > 240 ? send.slice(0,240)+'…' : send}`);
     ws.send(send);
@@ -2909,38 +2880,109 @@ async function rtTest24133(url) {
     while (!received && Date.now() - start < 5000) await new Promise(r => setTimeout(r, 50));
     const dt = (performance.now() - t0).toFixed(0);
     try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
-    if (!received) rtSetTest('k24133', 'NIP-46 kind 24133 echo', 'fail', 'no echo within 5s — relay may filter ephemeral kinds');
-    else rtSetTest('k24133', 'NIP-46 kind 24133 echo', 'pass', `echo received in ${dt}ms`);
+    if (!received) {
+      rtSetTest('forward', '3 · forwards 24133 by #p tag', 'fail', 'no echo within 5s — relay drops ephemeral 2xxxx or ignores #p');
+      ws.close(); return false;
+    }
+    rtSetTest('forward', '3 · forwards 24133 by #p tag', 'pass', `delivered in ${dt}ms`);
     ws.close();
+    return true;
   } catch (e) {
-    rtSetTest('k24133', 'NIP-46 kind 24133 echo', 'fail', e.message);
+    rtSetTest('forward', '3 · forwards 24133 by #p tag', 'fail', e.message);
     if (ws) try { ws.close(); } catch {}
+    return false;
   }
 }
 
-async function rtTestAuth(url) {
-  rtSetTest('auth', 'NIP-42 AUTH challenge', 'running', '…');
-  let ws, sawAuth = false, authChallenge = null;
+// Full simulation: two keypairs (client + bunker) on one socket,
+// client sends encrypted JSON-RPC ping → bunker decrypts, signs pong reply, publishes
+// → client receives, decrypts, validates id matches. Measures end-to-end.
+async function rtCheckRpc(url) {
+  rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'running', '…');
+  const clientSk = nt.generateSecretKey();
+  const clientPk = nt.getPublicKey(clientSk);
+  const bunkerSk = nt.generateSecretKey();
+  const bunkerPk = nt.getPublicKey(bunkerSk);
+
+  const clientSubId = 'rt-rpc-c-' + rid().slice(0, 6);
+  const bunkerSubId = 'rt-rpc-b-' + rid().slice(0, 6);
+  const reqId = rid();
+
+  let ws, gotPong = false, gotPongValid = false;
+  let bunkerEose = false, clientEose = false;
+  let bunkerHandled = false;
+
   try {
-    ({ ws } = await rtRawWs(url, (data) => {
+    ({ ws } = await rtRawWs(url, async (data) => {
       try {
         const arr = JSON.parse(data);
-        if (arr[0] === 'AUTH' && typeof arr[1] === 'string') {
-          sawAuth = true;
-          authChallenge = arr[1];
+        if (arr[0] === 'EOSE' && arr[1] === bunkerSubId) bunkerEose = true;
+        if (arr[0] === 'EOSE' && arr[1] === clientSubId) clientEose = true;
+        // Bunker side: incoming request from client
+        if (arr[0] === 'EVENT' && arr[1] === bunkerSubId && arr[2]?.kind === 24133 && !bunkerHandled) {
+          const ev = arr[2];
+          if (ev.pubkey !== clientPk) return;
+          bunkerHandled = true;
+          const pt = await nip04.decrypt(bunkerSk, ev.pubkey, ev.content);
+          const req = JSON.parse(pt);
+          rtTrace(`◎ bunker decrypted method=${req.method} id=${req.id?.slice(0,8)}`);
+          if (req.method !== 'ping') return;
+          const reply = await rtMake24133(bunkerSk, clientPk, { id: req.id, result: 'pong' });
+          const send = JSON.stringify(['EVENT', reply]);
+          rtTrace(`→ (bunker) ${send.length > 240 ? send.slice(0,240)+'…' : send}`);
+          ws.send(send);
         }
-      } catch {}
+        // Client side: incoming response from bunker
+        if (arr[0] === 'EVENT' && arr[1] === clientSubId && arr[2]?.kind === 24133) {
+          const ev = arr[2];
+          if (ev.pubkey !== bunkerPk) return;
+          const pt = await nip04.decrypt(clientSk, ev.pubkey, ev.content);
+          const res = JSON.parse(pt);
+          rtTrace(`◎ client decrypted result=${res.result} id=${res.id?.slice(0,8)}`);
+          if (res.id === reqId && res.result === 'pong') gotPongValid = true;
+          gotPong = true;
+        }
+      } catch (e) {
+        rtTrace(`◎ rpc handler error: ${e.message}`);
+      }
     }));
-    const subId = 'rt-auth-' + rid().slice(0, 8);
-    ws.send(JSON.stringify(['REQ', subId, { kinds: [1], limit: 1 }]));
-    await new Promise(r => setTimeout(r, 1500));
-    try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
-    if (sawAuth) rtSetTest('auth', 'NIP-42 AUTH challenge', 'pass', `relay sent AUTH: ${authChallenge.slice(0, 24)}…`);
-    else rtSetTest('auth', 'NIP-42 AUTH challenge', 'pass', 'no AUTH required (open relay)');
+
+    // Subscribe both sides
+    ws.send(JSON.stringify(['REQ', bunkerSubId, { kinds: [24133], '#p': [bunkerPk], since: nowSec() - 5 }]));
+    ws.send(JSON.stringify(['REQ', clientSubId, { kinds: [24133], '#p': [clientPk], since: nowSec() - 5 }]));
+    rtTrace(`→ REQ bunker(${bunkerSubId}) + client(${clientSubId})`);
+
+    // wait for both EOSE before sending
+    const eoseStart = Date.now();
+    while ((!bunkerEose || !clientEose) && Date.now() - eoseStart < 3000) await new Promise(r => setTimeout(r, 50));
+
+    const t0 = performance.now();
+    const reqEv = await rtMake24133(clientSk, bunkerPk, { id: reqId, method: 'ping', params: [] });
+    ws.send(JSON.stringify(['EVENT', reqEv]));
+    rtTrace(`→ (client) ping id=${reqId.slice(0,8)}`);
+
+    const start = Date.now();
+    while (!gotPong && Date.now() - start < 8000) await new Promise(r => setTimeout(r, 50));
+    const dt = (performance.now() - t0).toFixed(0);
+
+    try { ws.send(JSON.stringify(['CLOSE', bunkerSubId])); } catch {}
+    try { ws.send(JSON.stringify(['CLOSE', clientSubId])); } catch {}
+
+    if (!gotPong) {
+      rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'fail', `no pong received within 8s (bunker handled: ${bunkerHandled})`);
+      ws.close(); return false;
+    }
+    if (!gotPongValid) {
+      rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'fail', `response received but id/result mismatch`);
+      ws.close(); return false;
+    }
+    rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'pass', `ping → pong in ${dt}ms`);
     ws.close();
+    return true;
   } catch (e) {
-    rtSetTest('auth', 'NIP-42 AUTH challenge', 'fail', e.message);
+    rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'fail', e.message);
     if (ws) try { ws.close(); } catch {}
+    return false;
   }
 }
 

@@ -58,17 +58,18 @@ Run NIP-46 Lab as the remote signer itself — useful for testing your own clien
 
 ### Relay test mode
 
-A focused diagnostic tool for any nostr relay, with NIP-46-relevant checks:
+A focused check that answers one question: **can this relay carry NIP-46 bunker traffic?** Other relay capabilities (NIP-01 publish, NIP-11, AUTH, etc.) are out of scope.
 
-- **NIP-11 info document** — fetches `application/nostr+json` over HTTPS, surfaces name / software / version / supported NIPs
-- **WebSocket connect** — measures handshake latency
-- **Publish + readback** — sends an ephemeral kind 20000 event, waits for `OK` accept
-- **Subscription latency** — measures time-to-EOSE for a kind 1 query
-- **NIP-46 kind 24133 echo** — subscribes + publishes an ephemeral kind 24133 to itself; many relays drop ephemeral 2xxxx kinds, this catches them
-- **NIP-42 AUTH detection** — reports whether the relay challenges with `AUTH`
-- **Raw protocol trace** — every frame in/out, copyable
+Four sequential checks, each a hard prerequisite for bunker operation:
 
-Quick presets are included for damus, nostr.band, nos.lol, nsec.app, nostr.mom.
+1. **WebSocket reachable** — `wss://` handshake succeeds
+2. **Accepts kind 24133** — publishes a realistic encrypted kind 24133 event and verifies `OK true` from the relay (some relays blanket-reject the ephemeral 2xxxx range)
+3. **Forwards 24133 by `#p` tag** — subscribes with `{ kinds: [24133], "#p": [pk] }`, waits for EOSE, publishes to self, and confirms the relay actually delivers the event
+4. **Full encrypted RPC round-trip** — two ephemeral keypairs (client + bunker) on the same socket: client sends an encrypted JSON-RPC `ping`, bunker decrypts, replies with encrypted `pong`, client validates id and result. Measures end-to-end latency.
+
+The verdict at the top is binary: **supports bunker** or **will not work as bunker relay**, with the failing reason called out. A raw protocol trace shows every frame in/out for debugging.
+
+Quick presets are included for nsec.app, damus, nostr.band, nos.lol, nostr.mom.
 
 ## Usage
 
