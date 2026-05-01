@@ -450,6 +450,129 @@
     main { grid-template-columns: 1fr; height: auto; }
     .col { border-right: none; border-bottom: 1px solid var(--line); }
   }
+
+  /* ---------- mode switcher (top header) ---------- */
+  .mode-switch {
+    display: flex; gap: 0;
+    justify-content: center;
+    align-items: center;
+  }
+  .mode-switch .mode-tab {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 8px 16px;
+    cursor: pointer;
+    color: var(--ink-dim);
+    border: 1px solid var(--line);
+    border-right: none;
+    background: var(--bg-2);
+    transition: color .15s, background .15s;
+  }
+  .mode-switch .mode-tab:first-child { border-radius: 4px 0 0 4px; }
+  .mode-switch .mode-tab:last-child  { border-right: 1px solid var(--line); border-radius: 0 4px 4px 0; }
+  .mode-switch .mode-tab:hover { color: var(--ink); }
+  .mode-switch .mode-tab.active {
+    color: #0a0d0c;
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  main.mode-view { display: none; }
+  main.mode-view.active { display: grid; }
+
+  /* ---------- bunker mode ---------- */
+  .approval-card {
+    border: 1px solid var(--accent-4);
+    background: linear-gradient(135deg, rgba(255,184,107,0.10), rgba(255,184,107,0.02));
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .approval-card .ah {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .approval-card .ah .name {
+    color: var(--accent-4);
+    font-weight: 600;
+    font-size: 12px;
+  }
+  .approval-card .ah .from { color: var(--ink-faint); font-size: 10px; }
+  .approval-card pre {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 6px 8px;
+    margin: 6px 0;
+    font-size: 10px;
+    color: var(--ink-dim);
+    max-height: 140px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .client-card {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 9px 12px;
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+  .client-card .ch {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 8px;
+  }
+  .client-card .pk { color: var(--accent); font-family: var(--mono); }
+  .client-card .meta { color: var(--ink-faint); font-size: 10px; }
+  .client-card .perms { color: var(--ink-dim); font-size: 10px; margin-top: 4px; word-break: break-all; }
+
+  /* ---------- relay tester ---------- */
+  .test-row {
+    display: grid;
+    grid-template-columns: 110px 1fr 80px;
+    gap: 10px;
+    align-items: center;
+    padding: 9px 12px;
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+  .test-row .name { font-weight: 500; color: var(--ink); }
+  .test-row .info { color: var(--ink-dim); font-size: 10px; word-break: break-word; }
+  .test-row .verdict {
+    text-align: center;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .test-row .verdict.pending { color: var(--ink-faint); background: var(--bg-3); }
+  .test-row .verdict.running { color: var(--accent-4); background: rgba(255,184,107,0.12); }
+  .test-row .verdict.pass    { color: var(--accent); background: rgba(194,242,58,0.12); }
+  .test-row .verdict.fail    { color: var(--accent-2); background: rgba(255,91,126,0.12); }
+  .nip11-box {
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+  .nip11-box pre {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 8px;
+    margin: 6px 0 0;
+    font-size: 10px;
+    color: var(--ink-dim);
+    max-height: 280px;
+    overflow: auto;
+  }
 </style>
 </head>
 <body>
@@ -459,7 +582,11 @@
     nip<em>·46</em> lab
     <small>remote signer testbench</small>
   </div>
-  <div></div>
+  <div class="mode-switch">
+    <div class="mode-tab active" data-mode="client">client</div>
+    <div class="mode-tab" data-mode="bunker">bunker</div>
+    <div class="mode-tab" data-mode="relay">relay test</div>
+  </div>
   <div class="status">
     <span id="net-status" class="net-status"></span>
     <span><span class="dot" id="conn-dot"></span><span id="conn-text">disconnected</span></span>
@@ -468,7 +595,7 @@
   </div>
 </header>
 
-<main>
+<main class="mode-view active" data-mode="client">
   <!-- LEFT COLUMN: connection -->
   <section class="col">
     <div class="col-pad">
@@ -766,6 +893,190 @@ wss://relay.nostr.band</textarea>
 
       <div id="log">
         <p class="empty">No events yet. Connect to begin.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ========================================================== -->
+<!-- BUNKER MODE — act as a remote signer                         -->
+<!-- ========================================================== -->
+<main class="mode-view" data-mode="bunker">
+  <!-- LEFT: identity & exposure -->
+  <section class="col">
+    <div class="col-pad">
+      <h2>Bunker Identity</h2>
+      <div class="sub">User keypair · this is the identity you sign for</div>
+
+      <label>User secret key (hex / nsec) — leave blank to generate</label>
+      <input id="bk-user-sk" placeholder="auto-generate ephemeral key" />
+      <div class="btn-row">
+        <button id="btn-bk-load">load / generate</button>
+        <button class="ghost" id="btn-bk-paste-sk">paste</button>
+      </div>
+      <div id="bk-identity" style="display:none">
+        <div class="card" style="margin-top:14px">
+          <dl class="kv">
+            <dt>user pk</dt><dd class="copyable" id="bk-user-pk-display"></dd>
+            <dt>user npub</dt><dd class="copyable" id="bk-user-npub-display"></dd>
+            <dt>encryption</dt><dd id="bk-enc-display">nip04</dd>
+          </dl>
+        </div>
+      </div>
+
+      <h2>Bunker Relays</h2>
+      <div class="sub">Where the bunker listens for client requests</div>
+      <textarea id="bk-relays-input">wss://relay.nsec.app
+wss://relay.nostr.band</textarea>
+      <div class="btn-row">
+        <button id="btn-bk-start">start listening</button>
+        <button class="ghost" id="btn-bk-stop" disabled>stop</button>
+      </div>
+      <div id="bk-relay-list" class="relay-list" style="margin-top:10px">
+        <p class="empty">Bunker is offline.</p>
+      </div>
+
+      <h2>bunker:// URI</h2>
+      <div class="sub">Hand this to a client to connect</div>
+      <div class="row">
+        <div>
+          <label>Connect secret (optional)</label>
+          <input id="bk-secret" placeholder="auto-generated" />
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <button class="ghost" id="btn-bk-rotate-secret" style="width:100%">rotate</button>
+        </div>
+      </div>
+      <div class="copy-row">
+        <input id="bk-uri-out" readonly placeholder="start listening to generate URI" />
+        <button class="ghost" id="btn-bk-copy-uri">copy</button>
+      </div>
+      <div class="qr-wrap" id="bk-qr" style="display:none"></div>
+
+      <h2>Dial out via nostrconnect://</h2>
+      <div class="sub">Paste a client's nostrconnect URI — the bunker will connect</div>
+      <textarea id="bk-nc-input" placeholder="nostrconnect://..."></textarea>
+      <div class="btn-row">
+        <button id="btn-bk-dial">connect to client</button>
+        <button class="ghost" id="btn-bk-paste-nc">paste</button>
+      </div>
+
+      <h2>Approvals</h2>
+      <div class="sub">Default behaviour for incoming requests</div>
+      <div class="card" style="padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <input type="checkbox" id="bk-auto-approve" checked style="width:auto;margin:0">
+          <label for="bk-auto-approve" style="margin:0;font-size:11px;text-transform:none;letter-spacing:0;color:var(--ink)">auto-approve all requests (test mode)</label>
+        </div>
+        <p class="hint" style="margin:6px 0 0">When off, every request waits for manual approve / reject below.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- MIDDLE: clients & approvals -->
+  <section class="col">
+    <div class="col-pad">
+      <h2>Pending approvals</h2>
+      <div class="sub">Manual approve / reject when auto-approve is off</div>
+      <div id="bk-approvals">
+        <p class="empty">No pending requests.</p>
+      </div>
+
+      <h2>Connected clients</h2>
+      <div class="sub">Clients that have completed <code>connect</code></div>
+      <div id="bk-clients">
+        <p class="empty">No clients connected.</p>
+      </div>
+
+      <h2>Stats</h2>
+      <div class="card" style="padding:10px 12px">
+        <dl class="kv">
+          <dt>requests</dt><dd id="bk-stat-requests">0</dd>
+          <dt>signed</dt><dd id="bk-stat-signed">0</dd>
+          <dt>encrypted</dt><dd id="bk-stat-encrypted">0</dd>
+          <dt>decrypted</dt><dd id="bk-stat-decrypted">0</dd>
+          <dt>rejected</dt><dd id="bk-stat-rejected">0</dd>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: bunker log -->
+  <section class="col">
+    <div class="col-pad">
+      <h2>Bunker Log</h2>
+      <div class="sub">Live wire trace · kind 24133</div>
+
+      <div class="log-controls">
+        <div class="legend">
+          <span><i style="background:var(--accent-3)"></i>req</span>
+          <span><i style="background:var(--accent-5)"></i>res</span>
+          <span><i style="background:var(--accent-4)"></i>auth</span>
+          <span><i style="background:var(--accent-2)"></i>err</span>
+        </div>
+        <button class="ghost" id="btn-bk-log-clear">clear</button>
+      </div>
+
+      <div id="bk-log">
+        <p class="empty">Bunker idle. Start listening to begin.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ========================================================== -->
+<!-- RELAY TESTER MODE                                            -->
+<!-- ========================================================== -->
+<main class="mode-view" data-mode="relay">
+  <!-- LEFT: test config -->
+  <section class="col">
+    <div class="col-pad">
+      <h2>Bunker Relay Tester</h2>
+      <div class="sub">Does this relay support NIP-46 bunker traffic?</div>
+
+      <label>Relay URL</label>
+      <input id="rt-url" placeholder="wss://relay.example.com" value="wss://relay.nsec.app" />
+
+      <div class="btn-row">
+        <button id="btn-rt-run">run bunker check</button>
+        <button class="ghost" id="btn-rt-clear">clear</button>
+      </div>
+
+      <p class="hint">Runs every check needed for NIP-46 traffic to flow:
+        WebSocket reachability, kind 24133 acceptance, <code>#p</code>-tag forwarding for ephemeral events,
+        and a full encrypted client↔bunker round-trip. All checks use ephemeral keypairs.</p>
+
+      <h2>Quick presets</h2>
+      <div class="btn-row">
+        <button class="ghost" data-rt-preset="wss://relay.nsec.app">nsec.app</button>
+        <button class="ghost" data-rt-preset="wss://relay.damus.io">damus</button>
+        <button class="ghost" data-rt-preset="wss://relay.nostr.band">nostr.band</button>
+        <button class="ghost" data-rt-preset="wss://nos.lol">nos.lol</button>
+        <button class="ghost" data-rt-preset="wss://nostr.mom">nostr.mom</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MIDDLE+RIGHT: results -->
+  <section class="col" style="grid-column: span 2;">
+    <div class="col-pad">
+      <h2>Verdict</h2>
+      <div class="sub">Will NIP-46 work over this relay?</div>
+      <div id="rt-verdict" class="nip11-box">
+        <p class="empty" style="margin:0">Run the check to evaluate this relay.</p>
+      </div>
+
+      <h2>Checks</h2>
+      <div class="sub">All four are required for bunker traffic</div>
+      <div id="rt-results">
+        <p class="empty">No checks run yet.</p>
+      </div>
+
+      <h2>Trace</h2>
+      <div class="sub">Raw protocol exchange</div>
+      <div id="rt-trace" class="nip11-box">
+        <pre id="rt-trace-pre" style="margin:0;max-height:320px"></pre>
       </div>
     </div>
   </section>
@@ -1796,6 +2107,884 @@ startHeartbeat();
 log('sys', `nip-46 lab ready · network=<code>${state.online ? 'online' : 'offline'}</code> · visibility=<code>${state.visible ? 'visible' : 'hidden'}</code>`);
 log('sys', `open dev console for state: <code>__nip46</code>`);
 
+// ============================================================
+// MODE SWITCHER
+// ============================================================
+$$('.mode-tab').forEach(t => {
+  t.onclick = () => {
+    const mode = t.dataset.mode;
+    $$('.mode-tab').forEach(x => x.classList.toggle('active', x === t));
+    $$('main.mode-view').forEach(m => m.classList.toggle('active', m.dataset.mode === mode));
+  };
+});
+
+// ============================================================
+// BUNKER MODE — act as a remote signer
+// ============================================================
+const bunker = {
+  userSk: null,
+  userPk: null,
+  relays: new Map(),
+  clients: new Map(),
+  pendingApprovals: [],
+  secret: null,
+  listening: false,
+  encMode: 'nip04',
+  autoApprove: true,
+  stats: { requests: 0, signed: 0, encrypted: 0, decrypted: 0, rejected: 0 },
+  seenEventIds: new Set(),
+};
+window.__bunker = bunker;
+
+function bkLog(kind, summary, detail = {}) {
+  const host = $('bk-log');
+  if (host.querySelector('.empty')) host.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = `log-entry ${kind}`;
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+  let detailHTML = '';
+  for (const [k, v] of Object.entries(detail)) {
+    const text = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
+    detailHTML += `<div class="label-mini">${k}</div><pre>${escapeHTML(text)}</pre>`;
+  }
+  el.innerHTML = `
+    <div class="log-head">
+      <span><span class="log-tag">${kind}</span></span>
+      <span class="log-time">${time}</span>
+    </div>
+    <div class="log-summary">${summary}</div>
+    <div class="log-detail">${detailHTML}</div>
+  `;
+  el.addEventListener('click', () => el.classList.toggle('expanded'));
+  host.prepend(el);
+}
+
+$('btn-bk-log-clear').onclick = () => {
+  $('bk-log').innerHTML = '<p class="empty">Log cleared.</p>';
+};
+
+// ---- Identity
+$('btn-bk-paste-sk').onclick = async () => {
+  try { $('bk-user-sk').value = await navigator.clipboard.readText(); }
+  catch { toast('paste blocked', true); }
+};
+
+$('btn-bk-load').onclick = () => {
+  const v = $('bk-user-sk').value.trim();
+  let sk;
+  try {
+    if (!v) sk = nt.generateSecretKey();
+    else if (v.startsWith('nsec')) sk = nip19.decode(v).data;
+    else {
+      sk = fromHex(v);
+      if (sk.length !== 32) throw new Error('hex must be 64 chars');
+    }
+  } catch (e) { toast('invalid key: ' + e.message, true); return; }
+
+  bunker.userSk = sk;
+  bunker.userPk = nt.getPublicKey(sk);
+  $('bk-user-sk').value = nip19.nsecEncode(sk);
+  $('bk-identity').style.display = 'block';
+  const pkEl = $('bk-user-pk-display');
+  pkEl.textContent = bunker.userPk;
+  pkEl.onclick = () => copy(bunker.userPk);
+  const npub = nip19.npubEncode(bunker.userPk);
+  const npubEl = $('bk-user-npub-display');
+  npubEl.textContent = npub;
+  npubEl.onclick = () => copy(npub);
+  bkLog('sys', `identity loaded · pk=${shorten(bunker.userPk, 8)}`);
+  bkUpdateUri();
+};
+
+$('btn-bk-rotate-secret').onclick = () => {
+  bunker.secret = rid().slice(0, 16);
+  $('bk-secret').value = bunker.secret;
+  bkUpdateUri();
+};
+
+$('bk-secret').oninput = () => {
+  bunker.secret = $('bk-secret').value.trim() || null;
+  bkUpdateUri();
+};
+
+async function bkUpdateUri() {
+  if (!bunker.userPk || bunker.relays.size === 0) {
+    $('bk-uri-out').value = '';
+    $('bk-qr').style.display = 'none';
+    return;
+  }
+  const params = new URLSearchParams();
+  for (const url of bunker.relays.keys()) params.append('relay', url);
+  if (bunker.secret) params.set('secret', bunker.secret);
+  const uri = `bunker://${bunker.userPk}?${params.toString()}`;
+  $('bk-uri-out').value = uri;
+  try {
+    const dataUrl = await QRCode.toDataURL(uri, { margin: 1, width: 220 });
+    $('bk-qr').innerHTML = `<img src="${dataUrl}" width="220" height="220">`;
+    $('bk-qr').style.display = 'inline-block';
+  } catch {}
+}
+
+$('btn-bk-copy-uri').onclick = () => {
+  const v = $('bk-uri-out').value;
+  if (v) copy(v);
+};
+
+$('bk-auto-approve').onchange = (e) => {
+  bunker.autoApprove = e.target.checked;
+  bkLog('sys', `auto-approve <code>${e.target.checked ? 'on' : 'off'}</code>`);
+};
+
+// ---- Bunker relay management
+async function bkAddRelay(url) {
+  url = url.trim();
+  if (!url || !url.match(/^wss?:\/\//)) return;
+  let entry = bunker.relays.get(url);
+  if (entry && entry.status === 'connected') return;
+  if (!entry) {
+    entry = { relay: null, status: 'connecting', sub: null };
+    bunker.relays.set(url, entry);
+  } else {
+    entry.status = 'connecting';
+  }
+  bkRenderRelays();
+  try {
+    const relay = await Relay.connect(url);
+    entry.relay = relay;
+    entry.status = 'connected';
+    relay.onclose = () => {
+      const e2 = bunker.relays.get(url);
+      if (!e2) return;
+      e2.status = 'disconnected';
+      e2.relay = null;
+      e2.sub = null;
+      bkLog('err', `× lost connection to <code>${url}</code>`);
+      bkRenderRelays();
+      if (bunker.listening) setTimeout(() => bkAddRelay(url), 2000);
+    };
+    bkLog('sys', `connected to <code>${url}</code>`);
+    bkSubscribe(url);
+  } catch (e) {
+    entry.status = 'disconnected';
+    bkLog('err', `failed to connect <code>${url}</code>`, { error: String(e) });
+  }
+  bkRenderRelays();
+  bkUpdateUri();
+}
+
+function bkSubscribe(url) {
+  const entry = bunker.relays.get(url);
+  if (!entry || !entry.relay || entry.sub || !bunker.userPk) return;
+  entry.sub = entry.relay.subscribe(
+    [{ kinds: [24133], '#p': [bunker.userPk], since: nowSec() - 10 }],
+    {
+      onevent(ev) { bkHandleIncoming(ev); },
+      oneose() {},
+    }
+  );
+}
+
+function bkRenderRelays() {
+  const host = $('bk-relay-list');
+  if (bunker.relays.size === 0) {
+    host.innerHTML = '<p class="empty">Bunker is offline.</p>';
+    return;
+  }
+  host.innerHTML = '';
+  for (const [url, r] of bunker.relays) {
+    const el = document.createElement('div');
+    el.className = 'relay-item';
+    el.innerHTML = `
+      <span class="url">${escapeHTML(url)}</span>
+      <span class="state ${r.status}">${r.status}</span>
+      <span class="x" title="disconnect">✕</span>
+    `;
+    el.querySelector('.x').onclick = () => bkRemoveRelay(url);
+    host.appendChild(el);
+  }
+}
+
+function bkRemoveRelay(url) {
+  const entry = bunker.relays.get(url);
+  if (!entry) return;
+  if (entry.relay) try { entry.relay.onclose = null; } catch {}
+  try { entry.sub?.close(); } catch {}
+  try { entry.relay?.close(); } catch {}
+  bunker.relays.delete(url);
+  bkRenderRelays();
+  bkUpdateUri();
+}
+
+$('btn-bk-start').onclick = async () => {
+  if (!bunker.userPk) { toast('load identity first', true); return; }
+  const urls = $('bk-relays-input').value.split(/\s+/).map(s => s.trim()).filter(Boolean);
+  if (urls.length === 0) { toast('add at least one relay', true); return; }
+  if (!bunker.secret) {
+    bunker.secret = rid().slice(0, 16);
+    $('bk-secret').value = bunker.secret;
+  }
+  bunker.listening = true;
+  $('btn-bk-start').disabled = true;
+  $('btn-bk-stop').disabled = false;
+  bkLog('sys', `bunker starting · pk=${shorten(bunker.userPk, 8)}`);
+  for (const u of urls) await bkAddRelay(u);
+};
+
+$('btn-bk-stop').onclick = () => {
+  bunker.listening = false;
+  for (const url of [...bunker.relays.keys()]) bkRemoveRelay(url);
+  $('btn-bk-start').disabled = false;
+  $('btn-bk-stop').disabled = true;
+  bkLog('sys', 'bunker stopped');
+};
+
+// ---- Encryption
+async function bkEncrypt(plaintext, peerPk, mode) {
+  if (mode === 'nip44') {
+    const conv = nip44.utils.getConversationKey(bunker.userSk, peerPk);
+    return nip44.encrypt(plaintext, conv);
+  }
+  return await nip04.encrypt(bunker.userSk, peerPk, plaintext);
+}
+
+async function bkDecrypt(ciphertext, fromPk) {
+  const looksLikeNip04 = /\?iv=/.test(ciphertext);
+  const tryOrder = looksLikeNip04 ? ['nip04', 'nip44'] : ['nip44', 'nip04'];
+  let lastErr;
+  for (const mode of tryOrder) {
+    try {
+      let pt;
+      if (mode === 'nip44') {
+        const conv = nip44.utils.getConversationKey(bunker.userSk, fromPk);
+        pt = nip44.decrypt(ciphertext, conv);
+      } else {
+        pt = await nip04.decrypt(bunker.userSk, fromPk, ciphertext);
+      }
+      return { plaintext: pt, mode };
+    } catch (e) { lastErr = e; }
+  }
+  throw new Error('decrypt failed: ' + (lastErr?.message || ''));
+}
+
+async function bkHandleIncoming(ev) {
+  if (bunker.seenEventIds.has(ev.id)) return;
+  bunker.seenEventIds.add(ev.id);
+  const pTag = ev.tags.find(t => t[0] === 'p');
+  if (!pTag || pTag[1] !== bunker.userPk) return;
+
+  let payload, encMode;
+  try {
+    const dec = await bkDecrypt(ev.content, ev.pubkey);
+    payload = JSON.parse(dec.plaintext);
+    encMode = dec.mode;
+  } catch (e) {
+    bkLog('err', `decrypt failed from ${shorten(ev.pubkey, 6)}`, { error: String(e), event: ev });
+    return;
+  }
+
+  bunker.encMode = encMode;
+  $('bk-enc-display').textContent = encMode;
+
+  let client = bunker.clients.get(ev.pubkey);
+  if (!client) {
+    client = { firstSeen: Date.now(), lastSeen: Date.now(), perms: '', encMode, requests: 0, connected: false };
+    bunker.clients.set(ev.pubkey, client);
+  }
+  client.lastSeen = Date.now();
+  client.encMode = encMode;
+  client.requests++;
+  bunker.stats.requests++;
+  bkUpdateStats();
+
+  bkLog('req', `→ <code>${payload.method}</code> · id=${(payload.id||'').slice(0,8)} · from ${shorten(ev.pubkey,6)}`, {
+    method: payload.method,
+    params: payload.params,
+    encryption: encMode,
+    event: ev,
+  });
+
+  await bkDispatch(ev, payload, encMode, client);
+}
+
+async function bkDispatch(ev, payload, encMode, client) {
+  const { id, method, params } = payload;
+  const replyOk  = (result) => bkReply(ev.pubkey, id, { result }, encMode);
+  const replyErr = (error)  => bkReply(ev.pubkey, id, { error }, encMode);
+
+  const needsApproval = !bunker.autoApprove && method !== 'ping' && method !== 'connect';
+
+  const exec = async () => {
+    try {
+      switch (method) {
+        case 'connect': {
+          const [pubkey, secret, perms] = params || [];
+          if (pubkey && pubkey.toLowerCase() !== bunker.userPk) {
+            return replyErr(`pubkey mismatch: expected ${bunker.userPk}, got ${pubkey}`);
+          }
+          if (bunker.secret && secret !== bunker.secret && !client.ncSecret) {
+            return replyErr('invalid secret');
+          }
+          client.connected = true;
+          client.perms = perms || '';
+          bkRenderClients();
+          const result = client.ncSecret || 'ack';
+          return replyOk(result);
+        }
+        case 'ping':
+          return replyOk('pong');
+        case 'get_public_key':
+          return replyOk(bunker.userPk);
+        case 'sign_event': {
+          const [eventJson] = params || [];
+          let tpl;
+          try { tpl = JSON.parse(eventJson); } catch { return replyErr('invalid event JSON'); }
+          tpl.pubkey = bunker.userPk;
+          if (!tpl.created_at) tpl.created_at = nowSec();
+          if (!tpl.tags) tpl.tags = [];
+          if (typeof tpl.content !== 'string') tpl.content = '';
+          const signed = nt.finalizeEvent(tpl, bunker.userSk);
+          bunker.stats.signed++;
+          bkUpdateStats();
+          return replyOk(JSON.stringify(signed));
+        }
+        case 'nip04_encrypt': {
+          const [peerPk, plaintext] = params || [];
+          const ct = await nip04.encrypt(bunker.userSk, peerPk, plaintext);
+          bunker.stats.encrypted++;
+          bkUpdateStats();
+          return replyOk(ct);
+        }
+        case 'nip04_decrypt': {
+          const [peerPk, ciphertext] = params || [];
+          const pt = await nip04.decrypt(bunker.userSk, peerPk, ciphertext);
+          bunker.stats.decrypted++;
+          bkUpdateStats();
+          return replyOk(pt);
+        }
+        case 'nip44_encrypt': {
+          const [peerPk, plaintext] = params || [];
+          const conv = nip44.utils.getConversationKey(bunker.userSk, peerPk);
+          const ct = nip44.encrypt(plaintext, conv);
+          bunker.stats.encrypted++;
+          bkUpdateStats();
+          return replyOk(ct);
+        }
+        case 'nip44_decrypt': {
+          const [peerPk, ciphertext] = params || [];
+          const conv = nip44.utils.getConversationKey(bunker.userSk, peerPk);
+          const pt = nip44.decrypt(ciphertext, conv);
+          bunker.stats.decrypted++;
+          bkUpdateStats();
+          return replyOk(pt);
+        }
+        case 'switch_relays':
+          return replyOk(JSON.stringify([...bunker.relays.keys()]));
+        default:
+          return replyErr(`unsupported method: ${method}`);
+      }
+    } catch (e) {
+      return replyErr(e.message || String(e));
+    }
+  };
+
+  if (needsApproval) {
+    bkPushApproval({
+      id, clientPk: ev.pubkey, method, params, ts: Date.now(),
+      approve: async () => { await exec(); },
+      reject:  async () => {
+        bunker.stats.rejected++;
+        bkUpdateStats();
+        await replyErr('user rejected request');
+      },
+    });
+  } else {
+    await exec();
+  }
+}
+
+async function bkReply(toPk, id, body, encMode) {
+  const payload = { id, ...body };
+  const cipher = await bkEncrypt(JSON.stringify(payload), toPk, encMode);
+  const evtTpl = {
+    kind: 24133,
+    pubkey: bunker.userPk,
+    created_at: nowSec(),
+    tags: [['p', toPk]],
+    content: cipher,
+  };
+  const signed = nt.finalizeEvent(evtTpl, bunker.userSk);
+  const connected = [...bunker.relays.values()].filter(r => r.status === 'connected');
+  if (connected.length === 0) {
+    bkLog('err', `no relays available to reply id=${id?.slice(0,8)}`);
+    return;
+  }
+  await Promise.allSettled(connected.map(r => r.relay.publish(signed).catch(() => {})));
+  const tag = body.error ? 'err' : 'res';
+  const summary = body.error
+    ? `← <code>error</code> · id=${id?.slice(0,8)} · ${escapeHTML(body.error)}`
+    : `← <code>result</code> · id=${id?.slice(0,8)} · ${escapeHTML(shortenResult(body.result))}`;
+  bkLog(tag, summary, { payload, event: signed });
+}
+
+function bkPushApproval(a) {
+  bunker.pendingApprovals.push(a);
+  bkRenderApprovals();
+}
+
+function bkRenderApprovals() {
+  const host = $('bk-approvals');
+  if (bunker.pendingApprovals.length === 0) {
+    host.innerHTML = '<p class="empty">No pending requests.</p>';
+    return;
+  }
+  host.innerHTML = '';
+  for (const a of bunker.pendingApprovals) {
+    const el = document.createElement('div');
+    el.className = 'approval-card';
+    const paramsStr = JSON.stringify(a.params, null, 2);
+    el.innerHTML = `
+      <div class="ah">
+        <span class="name">${escapeHTML(a.method)}</span>
+        <span class="from">from ${shorten(a.clientPk, 6)} · id ${(a.id||'').slice(0,8)}</span>
+      </div>
+      <pre>${escapeHTML(paramsStr.length > 600 ? paramsStr.slice(0,600)+'…' : paramsStr)}</pre>
+      <div class="btn-row">
+        <button data-act="approve">approve</button>
+        <button class="danger" data-act="reject">reject</button>
+      </div>
+    `;
+    el.querySelector('[data-act="approve"]').onclick = async () => {
+      bunker.pendingApprovals = bunker.pendingApprovals.filter(x => x !== a);
+      bkRenderApprovals();
+      await a.approve();
+    };
+    el.querySelector('[data-act="reject"]').onclick = async () => {
+      bunker.pendingApprovals = bunker.pendingApprovals.filter(x => x !== a);
+      bkRenderApprovals();
+      await a.reject();
+    };
+    host.appendChild(el);
+  }
+}
+
+function bkRenderClients() {
+  const host = $('bk-clients');
+  if (bunker.clients.size === 0) {
+    host.innerHTML = '<p class="empty">No clients connected.</p>';
+    return;
+  }
+  host.innerHTML = '';
+  for (const [pk, c] of bunker.clients) {
+    const el = document.createElement('div');
+    el.className = 'client-card';
+    const ago = Math.floor((Date.now() - c.lastSeen) / 1000);
+    el.innerHTML = `
+      <div class="ch">
+        <span class="pk">${shorten(pk, 8)}</span>
+        <span class="meta">${c.connected ? '✓ connected' : 'pending'} · ${c.encMode} · ${c.requests} req · ${ago}s ago</span>
+      </div>
+      ${c.perms ? `<div class="perms">perms: ${escapeHTML(c.perms)}</div>` : ''}
+    `;
+    host.appendChild(el);
+  }
+}
+
+function bkUpdateStats() {
+  $('bk-stat-requests').textContent  = bunker.stats.requests;
+  $('bk-stat-signed').textContent    = bunker.stats.signed;
+  $('bk-stat-encrypted').textContent = bunker.stats.encrypted;
+  $('bk-stat-decrypted').textContent = bunker.stats.decrypted;
+  $('bk-stat-rejected').textContent  = bunker.stats.rejected;
+  bkRenderClients();
+}
+
+// ---- Dial out via nostrconnect:// (bunker initiates connect to a client)
+$('btn-bk-paste-nc').onclick = async () => {
+  try { $('bk-nc-input').value = await navigator.clipboard.readText(); }
+  catch { toast('paste blocked', true); }
+};
+
+$('btn-bk-dial').onclick = async () => {
+  if (!bunker.userPk) { toast('load identity first', true); return; }
+  const uri = $('bk-nc-input').value.trim();
+  if (!uri.startsWith('nostrconnect://')) { toast('invalid nostrconnect URI', true); return; }
+  let parsed;
+  try {
+    const u = new URL(uri);
+    const clientPk = (u.hostname || u.pathname.replace(/^\/+/, '')).toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(clientPk)) throw new Error('invalid client pubkey');
+    const relays = u.searchParams.getAll('relay');
+    const secret = u.searchParams.get('secret') || '';
+    if (relays.length === 0) throw new Error('missing relay');
+    parsed = { clientPk, relays, secret };
+  } catch (e) { toast(e.message, true); return; }
+
+  bunker.listening = true;
+  $('btn-bk-start').disabled = true;
+  $('btn-bk-stop').disabled = false;
+  for (const r of parsed.relays) await bkAddRelay(r);
+
+  let client = bunker.clients.get(parsed.clientPk);
+  if (!client) {
+    client = { firstSeen: Date.now(), lastSeen: Date.now(), perms: '', encMode: 'nip04', requests: 0, connected: false };
+    bunker.clients.set(parsed.clientPk, client);
+  }
+  client.ncSecret = parsed.secret;
+  bkRenderClients();
+
+  const encMode = 'nip04';
+  const id = rid();
+  const payload = { id, result: parsed.secret };
+  const cipher = await bkEncrypt(JSON.stringify(payload), parsed.clientPk, encMode);
+  const evtTpl = {
+    kind: 24133,
+    pubkey: bunker.userPk,
+    created_at: nowSec(),
+    tags: [['p', parsed.clientPk]],
+    content: cipher,
+  };
+  const signed = nt.finalizeEvent(evtTpl, bunker.userSk);
+  const connected = [...bunker.relays.values()].filter(r => r.status === 'connected');
+  await Promise.allSettled(connected.map(r => r.relay.publish(signed).catch(() => {})));
+  bkLog('res', `← <code>connect</code> · dialed client ${shorten(parsed.clientPk, 8)} · sent secret`, { payload, event: signed });
+  toast('connect sent to client');
+};
+
+// ============================================================
+// RELAY TESTER MODE
+// ============================================================
+const tester = { trace: [] };
+
+function rtTrace(line) {
+  const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
+  tester.trace.push(`[${ts}] ${line}`);
+  $('rt-trace-pre').textContent = tester.trace.join('\n');
+}
+
+function rtSetTest(name, label, verdict, info) {
+  const host = $('rt-results');
+  if (host.querySelector('.empty')) host.innerHTML = '';
+  let row = host.querySelector(`.test-row[data-test="${name}"]`);
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'test-row';
+    row.dataset.test = name;
+    row.innerHTML = `
+      <span class="name"></span>
+      <span class="info"></span>
+      <span class="verdict pending">pending</span>
+    `;
+    host.appendChild(row);
+  }
+  row.querySelector('.name').textContent = label;
+  row.querySelector('.info').textContent = info || '';
+  const v = row.querySelector('.verdict');
+  v.className = 'verdict ' + verdict;
+  v.textContent = verdict;
+}
+
+$$('[data-rt-preset]').forEach(b => {
+  b.onclick = () => { $('rt-url').value = b.dataset.rtPreset; };
+});
+
+function rtSetVerdict(state, msg) {
+  const host = $('rt-verdict');
+  let colour = 'var(--ink-dim)';
+  let label = 'unknown';
+  if (state === 'pass') { colour = 'var(--accent)'; label = 'supports bunker'; }
+  else if (state === 'fail') { colour = 'var(--accent-2)'; label = 'will not work as bunker relay'; }
+  else if (state === 'running') { colour = 'var(--accent-4)'; label = 'checking…'; }
+  host.innerHTML = `
+    <div style="color:${colour};font-family:var(--serif);font-size:18px;font-weight:600">${label}</div>
+    <div style="color:var(--ink-dim);font-size:11px;margin-top:4px">${escapeHTML(msg)}</div>
+  `;
+}
+
+$('btn-rt-clear').onclick = () => {
+  $('rt-results').innerHTML = '<p class="empty">No checks run yet.</p>';
+  $('rt-verdict').innerHTML = '<p class="empty" style="margin:0">Run the check to evaluate this relay.</p>';
+  tester.trace = [];
+  $('rt-trace-pre').textContent = '';
+};
+
+$('btn-rt-run').onclick = async () => {
+  const url = $('rt-url').value.trim();
+  if (!url || !url.match(/^wss?:\/\//)) { toast('invalid relay URL', true); return; }
+
+  $('rt-results').innerHTML = '';
+  tester.trace = [];
+  $('rt-trace-pre').textContent = '';
+  rtTrace(`▶ bunker relay check on ${url}`);
+  rtSetVerdict('running', url);
+
+  // pre-register checks so they show as pending in order
+  rtSetTest('connect', '1 · WebSocket reachable',     'pending', '');
+  rtSetTest('accept',  '2 · accepts kind 24133',      'pending', '');
+  rtSetTest('forward', '3 · forwards 24133 by #p tag','pending', '');
+  rtSetTest('rpc',     '4 · full encrypted RPC round-trip', 'pending', '');
+
+  $('btn-rt-run').disabled = true;
+  const results = {};
+  try {
+    results.connect = await rtCheckConnect(url);
+    if (!results.connect) { rtFinishVerdict(results); return; }
+
+    results.accept = await rtCheckAccept(url);
+    results.forward = await rtCheckForward(url);
+    if (results.connect && results.accept && results.forward) {
+      results.rpc = await rtCheckRpc(url);
+    } else {
+      rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'fail', 'skipped — earlier check failed');
+      results.rpc = false;
+    }
+    rtFinishVerdict(results);
+  } finally {
+    $('btn-rt-run').disabled = false;
+    rtTrace(`■ done`);
+  }
+};
+
+function rtFinishVerdict(r) {
+  const allPass = r.connect && r.accept && r.forward && r.rpc;
+  if (allPass) {
+    rtSetVerdict('pass', 'kind 24133 is accepted, forwarded with #p filtering, and a full encrypted ping/pong completed end-to-end.');
+  } else {
+    const reasons = [];
+    if (!r.connect) reasons.push('WebSocket connect failed');
+    if (!r.accept)  reasons.push('relay rejected kind 24133');
+    if (!r.forward) reasons.push('relay did not forward kind 24133 with #p filter (likely strips ephemeral 2xxxx)');
+    if (!r.rpc)     reasons.push('end-to-end encrypted round-trip failed');
+    rtSetVerdict('fail', reasons.join(' · '));
+  }
+}
+
+function rtRawWs(url, onMessage) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url);
+    const t0 = performance.now();
+    let opened = false;
+    ws.onopen = () => {
+      opened = true;
+      const dt = performance.now() - t0;
+      rtTrace(`◇ open ${url} (${dt.toFixed(0)}ms)`);
+      resolve({ ws, openMs: dt });
+    };
+    ws.onerror = () => { if (!opened) reject(new Error('WebSocket error')); };
+    ws.onclose = (e) => {
+      rtTrace(`◇ close code=${e.code} reason=${e.reason || '(none)'}`);
+      if (!opened) reject(new Error(`close before open · code ${e.code}`));
+    };
+    ws.onmessage = (m) => {
+      const data = m.data;
+      rtTrace(`← ${data.length > 240 ? data.slice(0,240)+'…' : data}`);
+      onMessage?.(data);
+    };
+  });
+}
+
+async function rtCheckConnect(url) {
+  rtSetTest('connect', '1 · WebSocket reachable', 'running', '…');
+  try {
+    const { ws, openMs } = await rtRawWs(url);
+    rtSetTest('connect', '1 · WebSocket reachable', 'pass', `handshake ${openMs.toFixed(0)}ms`);
+    ws.close();
+    return true;
+  } catch (e) {
+    rtSetTest('connect', '1 · WebSocket reachable', 'fail', e.message);
+    return false;
+  }
+}
+
+// Build a realistic encrypted kind 24133 event (NIP-04 cipher to a peer pubkey)
+async function rtMake24133(fromSk, toPk, payloadObj) {
+  const cipher = await nip04.encrypt(fromSk, toPk, JSON.stringify(payloadObj));
+  return nt.finalizeEvent({
+    kind: 24133,
+    created_at: nowSec(),
+    tags: [['p', toPk]],
+    content: cipher,
+  }, fromSk);
+}
+
+async function rtCheckAccept(url) {
+  rtSetTest('accept', '2 · accepts kind 24133', 'running', 'publishing realistic NIP-46 event…');
+  // realistic payload: encrypted JSON-RPC ping from one ephemeral key to another
+  const aSk = nt.generateSecretKey();
+  const bSk = nt.generateSecretKey();
+  const bPk = nt.getPublicKey(bSk);
+  const ev = await rtMake24133(aSk, bPk, { id: rid(), method: 'ping', params: [] });
+
+  let ws, accepted = false, replied = false, msg = '';
+  try {
+    ({ ws } = await rtRawWs(url, (data) => {
+      try {
+        const arr = JSON.parse(data);
+        if (arr[0] === 'OK' && arr[1] === ev.id) { accepted = arr[2] === true; msg = arr[3] || ''; replied = true; }
+      } catch {}
+    }));
+    const t0 = performance.now();
+    const send = JSON.stringify(['EVENT', ev]);
+    rtTrace(`→ ${send.length > 240 ? send.slice(0,240)+'…' : send}`);
+    ws.send(send);
+
+    const start = Date.now();
+    while (!replied && Date.now() - start < 5000) await new Promise(r => setTimeout(r, 50));
+    const dt = (performance.now() - t0).toFixed(0);
+
+    if (!replied) {
+      rtSetTest('accept', '2 · accepts kind 24133', 'fail', 'no OK reply within 5s');
+      ws.close(); return false;
+    }
+    if (!accepted) {
+      rtSetTest('accept', '2 · accepts kind 24133', 'fail', `relay rejected: ${msg || '(no reason)'} (${dt}ms)`);
+      ws.close(); return false;
+    }
+    rtSetTest('accept', '2 · accepts kind 24133', 'pass', `OK in ${dt}ms${msg ? ' · ' + msg : ''}`);
+    ws.close();
+    return true;
+  } catch (e) {
+    rtSetTest('accept', '2 · accepts kind 24133', 'fail', e.message);
+    if (ws) try { ws.close(); } catch {}
+    return false;
+  }
+}
+
+async function rtCheckForward(url) {
+  rtSetTest('forward', '3 · forwards 24133 by #p tag', 'running', 'subscribe + publish to self…');
+  // Use ONE keypair as both signer and recipient (matches what bunker does — listens on its own pubkey)
+  const sk = nt.generateSecretKey();
+  const pk = nt.getPublicKey(sk);
+  const subId = 'rt-fwd-' + rid().slice(0, 8);
+  let ws, received = false, gotEose = false;
+  try {
+    ({ ws } = await rtRawWs(url, (data) => {
+      try {
+        const arr = JSON.parse(data);
+        if (arr[0] === 'EOSE'  && arr[1] === subId) gotEose = true;
+        if (arr[0] === 'EVENT' && arr[1] === subId && arr[2]?.kind === 24133) received = true;
+      } catch {}
+    }));
+    const req = JSON.stringify(['REQ', subId, { kinds: [24133], '#p': [pk], since: nowSec() - 5 }]);
+    rtTrace(`→ ${req}`);
+    ws.send(req);
+    // wait for EOSE so the sub is definitely live before publishing
+    const eoseStart = Date.now();
+    while (!gotEose && Date.now() - eoseStart < 3000) await new Promise(r => setTimeout(r, 50));
+    const t0 = performance.now();
+    // realistic encrypted self-targeted 24133
+    const ev = await rtMake24133(sk, pk, { id: rid(), method: 'ping', params: [] });
+    const send = JSON.stringify(['EVENT', ev]);
+    rtTrace(`→ ${send.length > 240 ? send.slice(0,240)+'…' : send}`);
+    ws.send(send);
+    const start = Date.now();
+    while (!received && Date.now() - start < 5000) await new Promise(r => setTimeout(r, 50));
+    const dt = (performance.now() - t0).toFixed(0);
+    try { ws.send(JSON.stringify(['CLOSE', subId])); } catch {}
+    if (!received) {
+      rtSetTest('forward', '3 · forwards 24133 by #p tag', 'fail', 'no echo within 5s — relay drops ephemeral 2xxxx or ignores #p');
+      ws.close(); return false;
+    }
+    rtSetTest('forward', '3 · forwards 24133 by #p tag', 'pass', `delivered in ${dt}ms`);
+    ws.close();
+    return true;
+  } catch (e) {
+    rtSetTest('forward', '3 · forwards 24133 by #p tag', 'fail', e.message);
+    if (ws) try { ws.close(); } catch {}
+    return false;
+  }
+}
+
+// Full simulation: two keypairs (client + bunker) on one socket,
+// client sends encrypted JSON-RPC ping → bunker decrypts, signs pong reply, publishes
+// → client receives, decrypts, validates id matches. Measures end-to-end.
+async function rtCheckRpc(url) {
+  rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'running', '…');
+  const clientSk = nt.generateSecretKey();
+  const clientPk = nt.getPublicKey(clientSk);
+  const bunkerSk = nt.generateSecretKey();
+  const bunkerPk = nt.getPublicKey(bunkerSk);
+
+  const clientSubId = 'rt-rpc-c-' + rid().slice(0, 6);
+  const bunkerSubId = 'rt-rpc-b-' + rid().slice(0, 6);
+  const reqId = rid();
+
+  let ws, gotPong = false, gotPongValid = false;
+  let bunkerEose = false, clientEose = false;
+  let bunkerHandled = false;
+
+  try {
+    ({ ws } = await rtRawWs(url, async (data) => {
+      try {
+        const arr = JSON.parse(data);
+        if (arr[0] === 'EOSE' && arr[1] === bunkerSubId) bunkerEose = true;
+        if (arr[0] === 'EOSE' && arr[1] === clientSubId) clientEose = true;
+        // Bunker side: incoming request from client
+        if (arr[0] === 'EVENT' && arr[1] === bunkerSubId && arr[2]?.kind === 24133 && !bunkerHandled) {
+          const ev = arr[2];
+          if (ev.pubkey !== clientPk) return;
+          bunkerHandled = true;
+          const pt = await nip04.decrypt(bunkerSk, ev.pubkey, ev.content);
+          const req = JSON.parse(pt);
+          rtTrace(`◎ bunker decrypted method=${req.method} id=${req.id?.slice(0,8)}`);
+          if (req.method !== 'ping') return;
+          const reply = await rtMake24133(bunkerSk, clientPk, { id: req.id, result: 'pong' });
+          const send = JSON.stringify(['EVENT', reply]);
+          rtTrace(`→ (bunker) ${send.length > 240 ? send.slice(0,240)+'…' : send}`);
+          ws.send(send);
+        }
+        // Client side: incoming response from bunker
+        if (arr[0] === 'EVENT' && arr[1] === clientSubId && arr[2]?.kind === 24133) {
+          const ev = arr[2];
+          if (ev.pubkey !== bunkerPk) return;
+          const pt = await nip04.decrypt(clientSk, ev.pubkey, ev.content);
+          const res = JSON.parse(pt);
+          rtTrace(`◎ client decrypted result=${res.result} id=${res.id?.slice(0,8)}`);
+          if (res.id === reqId && res.result === 'pong') gotPongValid = true;
+          gotPong = true;
+        }
+      } catch (e) {
+        rtTrace(`◎ rpc handler error: ${e.message}`);
+      }
+    }));
+
+    // Subscribe both sides
+    ws.send(JSON.stringify(['REQ', bunkerSubId, { kinds: [24133], '#p': [bunkerPk], since: nowSec() - 5 }]));
+    ws.send(JSON.stringify(['REQ', clientSubId, { kinds: [24133], '#p': [clientPk], since: nowSec() - 5 }]));
+    rtTrace(`→ REQ bunker(${bunkerSubId}) + client(${clientSubId})`);
+
+    // wait for both EOSE before sending
+    const eoseStart = Date.now();
+    while ((!bunkerEose || !clientEose) && Date.now() - eoseStart < 3000) await new Promise(r => setTimeout(r, 50));
+
+    const t0 = performance.now();
+    const reqEv = await rtMake24133(clientSk, bunkerPk, { id: reqId, method: 'ping', params: [] });
+    ws.send(JSON.stringify(['EVENT', reqEv]));
+    rtTrace(`→ (client) ping id=${reqId.slice(0,8)}`);
+
+    const start = Date.now();
+    while (!gotPong && Date.now() - start < 8000) await new Promise(r => setTimeout(r, 50));
+    const dt = (performance.now() - t0).toFixed(0);
+
+    try { ws.send(JSON.stringify(['CLOSE', bunkerSubId])); } catch {}
+    try { ws.send(JSON.stringify(['CLOSE', clientSubId])); } catch {}
+
+    if (!gotPong) {
+      rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'fail', `no pong received within 8s (bunker handled: ${bunkerHandled})`);
+      ws.close(); return false;
+    }
+    if (!gotPongValid) {
+      rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'fail', `response received but id/result mismatch`);
+      ws.close(); return false;
+    }
+    rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'pass', `ping → pong in ${dt}ms`);
+    ws.close();
+    return true;
+  } catch (e) {
+    rtSetTest('rpc', '4 · full encrypted RPC round-trip', 'fail', e.message);
+    if (ws) try { ws.close(); } catch {}
+    return false;
+  }
+}
 
 </script>
 </body>
