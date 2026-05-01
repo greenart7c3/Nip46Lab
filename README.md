@@ -27,7 +27,7 @@ Toggle in the top header:
 
 **Auth challenge handling** — when the signer responds with `auth_url`, a banner surfaces the link and the request stays open for the second response.
 
-**Auto-detected transport encryption** — defaults to NIP-04 (most compatible with deployed bunkers), auto-upgrades to NIP-44 when detected. Manual override available.
+**Auto-detected transport encryption** — defaults to NIP-44 (modern, authenticated), auto-detects NIP-04 from inbound payloads for compatibility. Manual override available.
 
 **Reliability layer**
 - `online` / `offline` events, plus Network Information API (`navigator.connection`) — type, downlink, RTT
