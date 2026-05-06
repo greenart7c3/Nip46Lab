@@ -2,7 +2,7 @@
 
 A complete browser-based testbench for [NIP-46](https://github.com/nostr-protocol/nips/blob/master/46.md) (Nostr Connect / Remote Signing). One self-contained HTML file — no build, no server, no install. Open it and start testing your bunker.
 
-![screenshot](docs/screenshot.png)
+![screenshot](screenshot.png)
 
 ## Three modes
 
