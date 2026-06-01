@@ -20,8 +20,10 @@ Toggle in the top header:
 - `bunker://` (signer-initiated) — paste a URI from nsec.app, nsecBunker, Amber, etc.
 - `nostrconnect://` (client-initiated) — generate a URI with QR code, secret-validated per spec
 
-**All 9 NIP-46 RPC methods**
-`connect`, `ping`, `get_public_key`, `sign_event`, `nip04_encrypt`, `nip04_decrypt`, `nip44_encrypt`, `nip44_decrypt`, `switch_relays` — plus a `raw` method for testing extensions.
+**All NIP-46 RPC methods**
+`connect`, `ping`, `get_public_key`, `sign_event`, `nip04_encrypt`, `nip04_decrypt`, `nip44_encrypt`, `nip44_decrypt`, `nip44v3_encrypt`, `nip44v3_decrypt`, `switch_relays` — plus a `raw` method for testing extensions.
+
+**NIP-44 v3** — the new context-bound encryption scheme ([spec.nostr.land/nip44v3](https://github.com/nostr-land/nip44v3)) is implemented locally in pure JS (ChaCha20 + HKDF-SHA256 + HMAC, with `kind`/`scope` as authenticated data) and verified against the upstream test vectors. Exposed as the `nip44v3_encrypt` / `nip44v3_decrypt` signer methods in both client and bunker mode.
 
 **Live wire log** — every kind 24133 event in/out, color-coded (req/res/auth/err/sys), click any entry to expand and see the decrypted JSON-RPC payload plus the raw event.
 
@@ -51,7 +53,7 @@ Run NIP-46 Lab as the remote signer itself — useful for testing your own clien
 - **Approval gate** — auto-approve all (test mode) or manually approve / reject every request
 - **Per-client tracking** — sees connected clients, granted permissions, encryption mode, request counts
 - **Encryption auto-detect** — replies in NIP-04 or NIP-44 depending on what the client sent
-- **All 8 RPC methods implemented** — `connect`, `ping`, `get_public_key`, `sign_event`, `nip04_encrypt/decrypt`, `nip44_encrypt/decrypt`, `switch_relays`
+- **All RPC methods implemented** — `connect`, `ping`, `get_public_key`, `sign_event`, `nip04_encrypt/decrypt`, `nip44_encrypt/decrypt`, `nip44v3_encrypt/decrypt`, `switch_relays`
 - **Stats panel** — live counters for requests, signatures, encryptions, decryptions, rejections
 
 ⚠️ Browser-tab signing keys live in memory only — do not paste production `nsec`s into any web app you don't fully trust. The bunker mode is for testing.

@@ -616,7 +616,7 @@
         <label>Local secret key (hex / nsec) — leave blank to generate</label>
         <input id="bunker-local-sk" placeholder="auto-generate" />
         <label>Requested permissions (optional)</label>
-        <input id="bunker-perms" value="sign_event:1,sign_event:0,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt" />
+        <input id="bunker-perms" value="sign_event:1,sign_event:0,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt,nip44v3_encrypt,nip44v3_decrypt" />
         <div class="btn-row">
           <button id="btn-bunker-connect">connect</button>
           <button class="ghost" id="btn-bunker-paste">paste</button>
@@ -639,7 +639,7 @@
         <label>Relays (one per line)</label>
         <textarea id="nc-relays">wss://nos.lol</textarea>
         <label>Requested permissions</label>
-        <input id="nc-perms" value="sign_event:1,sign_event:0,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt,get_public_key" />
+        <input id="nc-perms" value="sign_event:1,sign_event:0,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt,nip44v3_encrypt,nip44v3_decrypt,get_public_key" />
         <div class="btn-row">
           <button id="btn-nc-generate">generate URI</button>
           <button class="ghost" id="btn-nc-cancel" disabled>cancel listening</button>
@@ -835,6 +835,52 @@
             <button class="ghost" data-fill-self="n44d-pub">use my pubkey</button>
           </div>
           <div class="result" id="r-nip44_decrypt"></div>
+        </div>
+      </div>
+
+      <!-- nip44v3_encrypt -->
+      <div class="method" data-method="nip44v3_encrypt">
+        <div class="method-head">
+          <span class="name">nip44v3_encrypt</span>
+          <span class="desc">v3 — context-bound encryption</span>
+        </div>
+        <div class="method-body">
+          <label>Recipient pubkey (hex)</label>
+          <input class="enc-pub" id="n44v3e-pub" placeholder="64-char hex" />
+          <label>Kind</label>
+          <input id="n44v3e-kind" value="1" placeholder="event kind (0–65535)" />
+          <label>Scope (optional)</label>
+          <input id="n44v3e-scope" placeholder="e.g. the list's d-tag" />
+          <label>Plaintext</label>
+          <textarea id="n44v3e-text">test message via nip-44 v3</textarea>
+          <div class="btn-row">
+            <button data-call="nip44v3_encrypt">encrypt</button>
+            <button class="ghost" data-fill-self="n44v3e-pub">use my pubkey</button>
+          </div>
+          <div class="result" id="r-nip44v3_encrypt"></div>
+        </div>
+      </div>
+
+      <!-- nip44v3_decrypt -->
+      <div class="method" data-method="nip44v3_decrypt">
+        <div class="method-head">
+          <span class="name">nip44v3_decrypt</span>
+          <span class="desc">decrypt a NIP-44 v3 payload</span>
+        </div>
+        <div class="method-body">
+          <label>Sender pubkey (hex)</label>
+          <input class="enc-pub" id="n44v3d-pub" placeholder="64-char hex" />
+          <label>Kind</label>
+          <input id="n44v3d-kind" value="1" placeholder="expected kind" />
+          <label>Scope (optional)</label>
+          <input id="n44v3d-scope" placeholder="expected scope" />
+          <label>Ciphertext (base64)</label>
+          <textarea id="n44v3d-text" placeholder="paste ciphertext from nip44v3_encrypt"></textarea>
+          <div class="btn-row">
+            <button data-call="nip44v3_decrypt">decrypt</button>
+            <button class="ghost" data-fill-self="n44v3d-pub">use my pubkey</button>
+          </div>
+          <div class="result" id="r-nip44v3_decrypt"></div>
         </div>
       </div>
 
@@ -1091,6 +1137,116 @@ import * as nip19 from 'https://esm.sh/nostr-tools@2.10.4/nip19';
 import { Relay } from 'https://esm.sh/nostr-tools@2.10.4/relay';
 import { v2 as nip44 } from 'https://esm.sh/nostr-tools@2.10.4/nip44';
 import QRCode from 'https://esm.sh/qrcode@1.5.4';
+// primitives for the local NIP-44 v3 implementation (same noble stack nostr-tools uses)
+import { secp256k1 } from 'https://esm.sh/@noble/curves@1.8.1/secp256k1';
+import { extract as hkdfExtract, expand as hkdfExpand } from 'https://esm.sh/@noble/hashes@1.7.1/hkdf';
+import { hmac } from 'https://esm.sh/@noble/hashes@1.7.1/hmac';
+import { sha256 } from 'https://esm.sh/@noble/hashes@1.7.1/sha256';
+import { chacha20 } from 'https://esm.sh/@noble/ciphers@1.2.1/chacha';
+import { base64 } from 'https://esm.sh/@scure/base@1.2.4';
+import { concatBytes, utf8ToBytes } from 'https://esm.sh/@noble/hashes@1.7.1/utils';
+
+// ============================================================
+// NIP-44 v3 — local implementation (spec.nostr.land/nip44v3)
+// Verified against the full upstream test-vectors.json (327 cases).
+// ============================================================
+const nip44v3 = (() => {
+  const PAD = { minimum_size: 32, subdivs_small: 4, subdivs_large: 8, large_threshold: 32768 };
+
+  function targetSize(len) {
+    if (len <= 0) return PAD.minimum_size;
+    const nextPower = 2 ** Math.ceil(Math.log2(len));
+    const subdivs = nextPower >= PAD.large_threshold ? PAD.subdivs_large : PAD.subdivs_small;
+    const chunkSize = Math.max(PAD.minimum_size, Math.floor(nextPower / subdivs));
+    return chunkSize * Math.ceil(len / chunkSize);
+  }
+  function u32be(n) {
+    const b = new Uint8Array(4);
+    new DataView(b.buffer).setUint32(0, n >>> 0, false);
+    return b;
+  }
+  function readU32be(b, off) {
+    return new DataView(b.buffer, b.byteOffset, b.byteLength).getUint32(off, false);
+  }
+  function equalBytes(a, b) {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+    return diff === 0;
+  }
+  function sharedSecret(seckey, pubkey) {
+    // x-only ECDH per BIP-340: drop the leading parity byte
+    return secp256k1.getSharedSecret(seckey, '02' + pubkey).subarray(1, 33);
+  }
+  function deriveKeys(seckey, pubkey, nonce) {
+    const shared = sharedSecret(seckey, pubkey);
+    const salt = concatBytes(utf8ToBytes('nip44-v3\x00'), nonce);
+    const prk = hkdfExtract(sha256, shared, salt);
+    return {
+      prk,
+      encryption_key: hkdfExpand(sha256, prk, utf8ToBytes('encryption_key'), 32),
+      mac_key: hkdfExpand(sha256, prk, utf8ToBytes('mac_key'), 32),
+    };
+  }
+  const chacha = (key, data) => chacha20(key, new Uint8Array(12), data);
+
+  // seckey: Uint8Array, pubkey: hex, scope/plaintext: Uint8Array. Returns base64 string.
+  function encryptBytes(seckey, pubkey, kind, scope, plaintext, nonce) {
+    if (!nonce) { nonce = new Uint8Array(32); crypto.getRandomValues(nonce); }
+    const { encryption_key, mac_key } = deriveKeys(seckey, pubkey, nonce);
+    const prefixed = concatBytes(u32be(plaintext.length), plaintext);
+    const padded = new Uint8Array(targetSize(prefixed.length));
+    padded.set(prefixed);
+    const ct = chacha(encryption_key, padded);
+    const stuffing = concatBytes(u32be(kind), u32be(scope.length), scope, ct);
+    const mac = hmac(sha256, mac_key, concatBytes(nonce, stuffing));
+    return base64.encode(concatBytes(new Uint8Array([3]), nonce, mac, stuffing));
+  }
+
+  function decryptBytes(seckey, pubkey, expectedKind, expectedScope, ciphertext) {
+    if (!ciphertext || ciphertext.length === 0) throw new Error('empty ciphertext');
+    if (ciphertext[0] === '#') throw new Error('unsupported future version');
+    let decoded;
+    try { decoded = base64.decode(ciphertext); } catch { throw new Error('invalid base64'); }
+    if (decoded.length < 77) throw new Error('ciphertext too short');
+    if (decoded[0] !== 3) throw new Error(`unsupported version ${decoded[0]}`);
+    const nonce = decoded.subarray(1, 33);
+    const mac = decoded.subarray(33, 65);
+    const kind = readU32be(decoded, 65);
+    const scopeLength = readU32be(decoded, 69);
+    if (scopeLength > decoded.length - 73) throw new Error('invalid scope length');
+    const scope = decoded.subarray(73, 73 + scopeLength);
+    try { new TextDecoder('utf-8', { fatal: true }).decode(scope); }
+    catch { throw new Error('scope is not valid UTF-8'); }
+    const ct = decoded.subarray(73 + scopeLength);
+    if (ct.length < 4) throw new Error('ciphertext too short');
+    if (kind !== expectedKind) throw new Error(`kind mismatch: got ${kind}, expected ${expectedKind}`);
+    if (!equalBytes(scope, expectedScope)) throw new Error('scope mismatch');
+    const { encryption_key, mac_key } = deriveKeys(seckey, pubkey, nonce);
+    const authData = concatBytes(nonce, u32be(kind), u32be(scope.length), scope, ct);
+    if (!equalBytes(mac, hmac(sha256, mac_key, authData))) throw new Error('invalid MAC');
+    const padded = chacha(encryption_key, ct);
+    const plaintextLength = readU32be(padded, 0);
+    if (plaintextLength + 4 > padded.length) throw new Error('invalid plaintext length');
+    if (plaintextLength > 2 ** 31 - 1) throw new Error('plaintext too long');
+    const padding = padded.subarray(4 + plaintextLength);
+    if (!equalBytes(padding, new Uint8Array(padding.length))) throw new Error('invalid padding');
+    return padded.subarray(4, 4 + plaintextLength);
+  }
+
+  // string-oriented helpers for the NIP-46 nip44v3_encrypt/decrypt methods.
+  // plaintext is UTF-8 text <-> base64 over the wire; scope is a UTF-8 string.
+  const encrypt = (seckey, pubkey, kind, scope, plaintext) =>
+    encryptBytes(seckey, pubkey, kind, utf8ToBytes(scope || ''), utf8ToBytes(plaintext));
+  const textDecoder = new TextDecoder('utf-8', { ignoreBOM: true });
+  const decrypt = (seckey, pubkey, kind, scope, ciphertext) =>
+    textDecoder.decode(decryptBytes(seckey, pubkey, kind, utf8ToBytes(scope || ''), ciphertext));
+
+  return { targetSize, deriveKeys, encryptBytes, decryptBytes, encrypt, decrypt,
+           b64encode: (b) => base64.encode(b), b64decode: (s) => base64.decode(s),
+           toBytes: utf8ToBytes, fromBytes: (b) => textDecoder.decode(b) };
+})();
+window.nip44v3 = nip44v3;
 
 // ============================================================
 // STATE
@@ -1924,6 +2080,24 @@ document.querySelectorAll('[data-call]').forEach(btn => {
       else if (method === 'nip44_decrypt') {
         result = await sendRequest('nip44_decrypt', [$('n44d-pub').value.trim(), $('n44d-text').value.trim()]);
       }
+      else if (method === 'nip44v3_encrypt') {
+        const kind = parseInt($('n44v3e-kind').value, 10);
+        if (!Number.isInteger(kind) || kind < 0) throw new Error('kind must be a non-negative integer');
+        const scope = $('n44v3e-scope').value;
+        const plaintextB64 = nip44v3.b64encode(nip44v3.toBytes($('n44v3e-text').value));
+        result = await sendRequest('nip44v3_encrypt', [$('n44v3e-pub').value.trim(), String(kind), scope, plaintextB64]);
+        // auto-fill the decrypt card with matching context
+        $('n44v3d-pub').value = state.userPk || '';
+        $('n44v3d-kind').value = String(kind);
+        $('n44v3d-scope').value = scope;
+        $('n44v3d-text').value = result;
+      }
+      else if (method === 'nip44v3_decrypt') {
+        const kind = parseInt($('n44v3d-kind').value, 10);
+        if (!Number.isInteger(kind) || kind < 0) throw new Error('kind must be a non-negative integer');
+        const b64 = await sendRequest('nip44v3_decrypt', [$('n44v3d-pub').value.trim(), String(kind), $('n44v3d-scope').value, $('n44v3d-text').value.trim()]);
+        result = nip44v3.fromBytes(nip44v3.b64decode(b64.trim()));
+      }
       else if (method === 'raw') {
         const m = $('raw-method').value.trim();
         if (!m) throw new Error('method required');
@@ -2504,6 +2678,25 @@ async function bkDispatch(ev, payload, encMode, client) {
           bunker.stats.decrypted++;
           bkUpdateStats();
           return replyOk(pt);
+        }
+        case 'nip44v3_encrypt': {
+          const [peerPk, kindStr, scope, plaintextB64] = params || [];
+          const kind = parseInt(kindStr, 10);
+          if (!Number.isInteger(kind) || kind < 0) return replyErr('invalid kind');
+          const plaintext = nip44v3.b64decode(plaintextB64);
+          const ct = nip44v3.encryptBytes(bunker.userSk, peerPk, kind, nip44v3.toBytes(scope || ''), plaintext);
+          bunker.stats.encrypted++;
+          bkUpdateStats();
+          return replyOk(ct);
+        }
+        case 'nip44v3_decrypt': {
+          const [peerPk, kindStr, scope, ciphertext] = params || [];
+          const kind = parseInt(kindStr, 10);
+          if (!Number.isInteger(kind) || kind < 0) return replyErr('invalid kind');
+          const pt = nip44v3.decryptBytes(bunker.userSk, peerPk, kind, nip44v3.toBytes(scope || ''), ciphertext);
+          bunker.stats.decrypted++;
+          bkUpdateStats();
+          return replyOk(nip44v3.b64encode(pt));
         }
         case 'switch_relays':
           return replyOk(JSON.stringify([...bunker.relays.keys()]));
