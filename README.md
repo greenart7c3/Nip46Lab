@@ -23,7 +23,7 @@ Toggle in the top header:
 **All NIP-46 RPC methods**
 `connect`, `ping`, `get_public_key`, `sign_event`, `nip04_encrypt`, `nip04_decrypt`, `nip44_encrypt`, `nip44_decrypt`, `nip44v3_encrypt`, `nip44v3_decrypt`, `switch_relays` — plus a `raw` method for testing extensions.
 
-**NIP-44 v3** — the new context-bound encryption scheme ([spec.nostr.land/nip44v3](https://github.com/nostr-land/nip44v3)) is implemented locally in pure JS (ChaCha20 + HKDF-SHA256 + HMAC, with `kind`/`scope` as authenticated data) and verified against the upstream test vectors. Exposed as the `nip44v3_encrypt` / `nip44v3_decrypt` signer methods in both client and bunker mode.
+**NIP-44 v3** — the new context-bound encryption scheme ([spec.nostr.land/nip44v3](https://github.com/nostr-land/nip44v3)) is implemented locally in pure JS (ChaCha20 + HKDF-SHA256 + HMAC, with `kind`/`scope` as authenticated data) and verified against the upstream test vectors. Exposed as the `nip44v3_encrypt` / `nip44v3_decrypt` signer methods in both client and bunker mode. A built-in **self-test** panel runs the vendored upstream `test-vectors.json` (key derivation, encrypt/decrypt, long messages, padding sizes, non-standard padding, and invalid-ciphertext rejection) against the local implementation — no connection or keys required.
 
 **Live wire log** — every kind 24133 event in/out, color-coded (req/res/auth/err/sys), click any entry to expand and see the decrypted JSON-RPC payload plus the raw event.
 
