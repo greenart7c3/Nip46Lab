@@ -1148,7 +1148,9 @@ import { concatBytes, utf8ToBytes } from 'https://esm.sh/@noble/hashes@1.7.1/uti
 
 // ============================================================
 // NIP-44 v3 — local implementation (spec.nostr.land/nip44v3)
-// Verified against the full upstream test-vectors.json (327 cases).
+// Verified against the full upstream test-vectors.json (228 cases), including the
+// decrypt_only set of intentionally non-standard padding lengths the spec now requires
+// implementations to accept on decrypt.
 // ============================================================
 const nip44v3 = (() => {
   const PAD = { minimum_size: 32, subdivs_small: 4, subdivs_large: 8, large_threshold: 32768 };
@@ -1229,6 +1231,9 @@ const nip44v3 = (() => {
     const plaintextLength = readU32be(padded, 0);
     if (plaintextLength + 4 > padded.length) throw new Error('invalid plaintext length');
     if (plaintextLength > 2 ** 31 - 1) throw new Error('plaintext too long');
+    // Only verify the padding is all-zeroes. Per spec, implementations MUST NOT do any
+    // other check on the padding length — non-standard (but all-zero) padding lengths are
+    // valid and must decrypt. Do not add a target_size(plaintextLength + 4) length check here.
     const padding = padded.subarray(4 + plaintextLength);
     if (!equalBytes(padding, new Uint8Array(padding.length))) throw new Error('invalid padding');
     return padded.subarray(4, 4 + plaintextLength);
