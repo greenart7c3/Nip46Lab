@@ -957,6 +957,21 @@
         </div>
       </div>
 
+      <!-- logout -->
+      <div class="method" data-method="logout">
+        <div class="method-head">
+          <span class="name">logout</span>
+          <span class="desc">end the session · expects "ack"</span>
+        </div>
+        <div class="method-body">
+          <p class="hint">Courtesy hint to the signer that the session is over. The signer should ack, then drop the session (a new connect is required to re-establish). The local client-keypair is deleted regardless of whether the request is acknowledged.</p>
+          <div class="btn-row">
+            <button class="danger" data-call="logout">logout</button>
+          </div>
+          <div class="result" id="r-logout"></div>
+        </div>
+      </div>
+
       <!-- raw -->
       <div class="method" data-method="raw">
         <div class="method-head">
@@ -2222,6 +2237,18 @@ document.querySelectorAll('[data-call]').forEach(btn => {
       else if (method === 'switch_relays') {
         result = await sendRequest('switch_relays', []);
       }
+      else if (method === 'logout') {
+        // Per NIP-46, the client MUST delete its local client-keypair on logout
+        // regardless of whether the signer acks — so tear down even on error/timeout.
+        try {
+          result = await sendRequest('logout', [], { timeout: 15000 });
+          setResult('logout', true, result);
+        } catch (e) {
+          setResult('logout', false, e.message);
+        }
+        disconnect();
+        return;
+      }
       else if (method === 'nip04_encrypt') {
         result = await sendRequest('nip04_encrypt', [$('n4e-pub').value.trim(), $('n4e-text').value]);
         // auto-fill decrypt
@@ -2494,6 +2521,7 @@ const bunker = {
   autoApprove: true,
   stats: { requests: 0, signed: 0, encrypted: 0, decrypted: 0, rejected: 0 },
   seenEventIds: new Set(),
+  loggedOut: new Set(),   // client-pubkeys that sent `logout` — reject until a new `connect`
 };
 window.__bunker = bunker;
 
@@ -2746,6 +2774,18 @@ async function bkHandleIncoming(ev) {
   bunker.encMode = encMode;
   $('bk-enc-display').textContent = encMode;
 
+  // A client that logged out has no active session. Reject everything until it
+  // sends a fresh `connect` (which clears the logged-out flag). Don't re-track it.
+  if (bunker.loggedOut.has(ev.pubkey) && payload.method !== 'connect') {
+    bunker.stats.rejected++;
+    bkUpdateStats();
+    bkLog('req', `→ <code>${payload.method}</code> · id=${(payload.id||'').slice(0,8)} · from ${shorten(ev.pubkey,6)} (rejected: session ended)`, {
+      method: payload.method, params: payload.params, event: ev,
+    });
+    await bkReply(ev.pubkey, payload.id, { error: 'no active session — a new connect is required' }, encMode);
+    return;
+  }
+
   let client = bunker.clients.get(ev.pubkey);
   if (!client) {
     client = { firstSeen: Date.now(), lastSeen: Date.now(), perms: '', encMode, requests: 0, connected: false };
@@ -2772,7 +2812,7 @@ async function bkDispatch(ev, payload, encMode, client) {
   const replyOk  = (result) => bkReply(ev.pubkey, id, { result }, encMode);
   const replyErr = (error)  => bkReply(ev.pubkey, id, { error }, encMode);
 
-  const needsApproval = !bunker.autoApprove && method !== 'ping' && method !== 'connect';
+  const needsApproval = !bunker.autoApprove && method !== 'ping' && method !== 'connect' && method !== 'logout';
 
   const exec = async () => {
     try {
@@ -2785,11 +2825,22 @@ async function bkDispatch(ev, payload, encMode, client) {
           if (bunker.secret && secret !== bunker.secret && !client.ncSecret) {
             return replyErr('invalid secret');
           }
+          bunker.loggedOut.delete(ev.pubkey);   // re-establishing a session
           client.connected = true;
           client.perms = perms || '';
           bkRenderClients();
           const result = client.ncSecret || 'ack';
           return replyOk(result);
+        }
+        case 'logout': {
+          // Courtesy hint that the client is ending the session. Ack first, then
+          // drop the session and reject further requests until a new connect.
+          await replyOk('ack');
+          bunker.clients.delete(ev.pubkey);
+          bunker.loggedOut.add(ev.pubkey);
+          bkRenderClients();
+          bkLog('sys', `client ${shorten(ev.pubkey,6)} logged out — session removed`);
+          return;
         }
         case 'ping':
           return replyOk('pong');
