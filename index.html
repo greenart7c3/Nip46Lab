@@ -656,6 +656,20 @@
         <input id="bunker-local-sk" placeholder="auto-generate" />
         <label>Requested permissions (optional)</label>
         <input id="bunker-perms" value="sign_event:1,sign_event:0,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt,nip44v3_encrypt,nip44v3_decrypt" />
+        <label>Client metadata (optional · <a href="https://github.com/nostr-protocol/nips/pull/2381" target="_blank" rel="noopener">NIP-46 PR #2381</a>)</label>
+        <p class="hint" style="margin:2px 0 6px">Sent as a 4th JSON-stringified <code>connect</code> param so the signer can label this session. Unauthenticated — a display hint only.</p>
+        <div class="row">
+          <div>
+            <label>name</label>
+            <input id="bunker-meta-name" value="NIP-46 Lab" />
+          </div>
+          <div>
+            <label>url</label>
+            <input id="bunker-meta-url" value="https://nip46.lab" />
+          </div>
+        </div>
+        <label>image</label>
+        <input id="bunker-meta-image" placeholder="https://…/icon.png" />
         <div class="btn-row">
           <button id="btn-bunker-connect">connect</button>
           <button class="ghost" id="btn-bunker-paste">paste</button>
@@ -1934,11 +1948,18 @@ $('btn-bunker-connect').onclick = async () => {
   updateStatus();
 
   // send connect
+  // params per spec (+ NIP-46 PR #2381):
+  //   [<remote-signer-pubkey>, <optional_secret>, <optional_requested_perms>, <optional_client_metadata>]
   const perms = $('bunker-perms').value.trim();
-  const params = [parsed.pubkey];
-  if (parsed.secret) params.push(parsed.secret);
-  else params.push('');
-  if (perms) params.push(perms);
+  const meta = buildClientMetadata('bunker-meta');
+  const params = [parsed.pubkey, parsed.secret || ''];
+  if (meta) {
+    // metadata must occupy the 4th position, so pass perms (possibly empty) at the 3rd
+    params.push(perms, JSON.stringify(meta));
+    log('sys', `client metadata → ${escapeHTML(JSON.stringify(meta))}`);
+  } else if (perms) {
+    params.push(perms);
+  }
 
   try {
     const res = await sendRequest('connect', params, {
@@ -1964,6 +1985,20 @@ function parseBunkerUri(uri) {
   const secret = u.searchParams.get('secret') || null;
   if (relays.length === 0) throw new Error('bunker URI missing relay');
   return { pubkey, relays, secret };
+}
+
+// Optional client metadata for the `connect` request (NIP-46 PR #2381).
+// Reads name / url / image inputs prefixed by `idPrefix` and returns a plain
+// object with only the non-empty fields, or null if nothing was provided.
+function buildClientMetadata(idPrefix) {
+  const meta = {};
+  const name  = $(`${idPrefix}-name`)?.value.trim();
+  const url   = $(`${idPrefix}-url`)?.value.trim();
+  const image = $(`${idPrefix}-image`)?.value.trim();
+  if (name)  meta.name = name;
+  if (url)   meta.url = url;
+  if (image) meta.image = image;
+  return Object.keys(meta).length ? meta : null;
 }
 
 async function fetchUserPubkey() {
@@ -2818,7 +2853,8 @@ async function bkDispatch(ev, payload, encMode, client) {
     try {
       switch (method) {
         case 'connect': {
-          const [pubkey, secret, perms] = params || [];
+          // [<remote-signer-pubkey>, <optional_secret>, <optional_requested_perms>, <optional_client_metadata>]
+          const [pubkey, secret, perms, metadataRaw] = params || [];
           if (pubkey && pubkey.toLowerCase() !== bunker.userPk) {
             return replyErr(`pubkey mismatch: expected ${bunker.userPk}, got ${pubkey}`);
           }
@@ -2828,6 +2864,16 @@ async function bkDispatch(ev, payload, encMode, client) {
           bunker.loggedOut.delete(ev.pubkey);   // re-establishing a session
           client.connected = true;
           client.perms = perms || '';
+          // Optional client metadata (NIP-46 PR #2381). Unauthenticated — a display
+          // hint only, never used for authorization decisions.
+          if (metadataRaw) {
+            try {
+              client.metadata = JSON.parse(metadataRaw);
+              bkLog('sys', `client ${shorten(ev.pubkey,6)} metadata: ${escapeHTML(JSON.stringify(client.metadata))}`);
+            } catch {
+              bkLog('err', `client ${shorten(ev.pubkey,6)} sent unparseable metadata`, { metadata: metadataRaw });
+            }
+          }
           bkRenderClients();
           const result = client.ncSecret || 'ack';
           return replyOk(result);
@@ -3009,11 +3055,24 @@ function bkRenderClients() {
     const el = document.createElement('div');
     el.className = 'client-card';
     const ago = Math.floor((Date.now() - c.lastSeen) / 1000);
+    const m = c.metadata;
+    let metaHtml = '';
+    if (m && (m.name || m.url || m.image)) {
+      const img = m.image
+        ? `<img src="${escapeHTML(m.image)}" alt="" style="width:18px;height:18px;border-radius:4px;object-fit:cover;flex:0 0 auto" onerror="this.style.display='none'">`
+        : '';
+      const name = m.name ? `<span style="font-weight:600">${escapeHTML(m.name)}</span>` : '';
+      const url = m.url
+        ? `<a href="${escapeHTML(m.url)}" target="_blank" rel="noopener" style="opacity:.75">${escapeHTML(m.url)}</a>`
+        : '';
+      metaHtml = `<div class="perms" style="display:flex;align-items:center;gap:6px">${img}${name}${url}</div>`;
+    }
     el.innerHTML = `
       <div class="ch">
         <span class="pk">${shorten(pk, 8)}</span>
         <span class="meta">${c.connected ? '✓ connected' : 'pending'} · ${c.encMode} · ${c.requests} req · ${ago}s ago</span>
       </div>
+      ${metaHtml}
       ${c.perms ? `<div class="perms">perms: ${escapeHTML(c.perms)}</div>` : ''}
     `;
     host.appendChild(el);
