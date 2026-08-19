@@ -963,7 +963,7 @@
           <span class="desc">signer returns its preferred relay set</span>
         </div>
         <div class="method-body">
-          <p class="hint">Per spec, clients should call this after connecting. Signer responds with an array of relay URLs (or null).</p>
+          <p class="hint">Per spec, clients should call this after connecting. Signer responds with an array of relay URLs (or null). The client immediately adopts the returned set — new relays are connected first, then stale ones are dropped. Also auto-sent right after a successful <code>connect</code>.</p>
           <div class="btn-row">
             <button data-call="switch_relays">request relay list</button>
           </div>
@@ -1682,6 +1682,55 @@ function disconnectRelay(url) {
   updateStatus();
 }
 
+// NIP-46 switch_relays: adopt the signer's preferred relay set.
+// The signer replies with an array of relay URLs — or null for "no change" —
+// and the client must immediately update its local state and use the new
+// relays for all further requests. Tolerates the double-encoded string form
+// some signers (and older versions of this lab) send.
+async function applySwitchRelays(result) {
+  let wanted = result;
+  if (typeof wanted === 'string') {
+    try { wanted = JSON.parse(wanted); } catch { wanted = null; }
+  }
+  if (wanted == null) {
+    log('sys', 'switch_relays → <code>null</code> · signer prefers current relays');
+    return null;
+  }
+  if (!Array.isArray(wanted) || wanted.some(u => typeof u !== 'string')) {
+    throw new Error('invalid switch_relays result — expected array of relay URLs');
+  }
+  wanted = [...new Set(wanted.map(u => u.trim()).filter(u => u.startsWith('ws://') || u.startsWith('wss://')))];
+  if (wanted.length === 0) throw new Error('switch_relays returned no usable relays');
+
+  const toAdd  = wanted.filter(u => !state.relays.has(u));
+  const toDrop = [...state.relays.keys()].filter(u => !wanted.includes(u));
+
+  if (toAdd.length === 0 && toDrop.length === 0) {
+    log('sys', `switch_relays → already on signer’s preferred relays`);
+    return { relays: wanted, added: [], dropped: [] };
+  }
+
+  log('sys', `switch_relays → adopting ${wanted.length} signer relay(s) · +${toAdd.length} · −${toDrop.length}`);
+  // Connect the new relays FIRST so there is no gap in coverage, then drop
+  // the ones the signer no longer wants (it may disconnect from them).
+  for (const u of toAdd) await addRelay(u, { silent: true });
+  for (const u of state.relays.keys()) subscribeRelay(u);
+  for (const u of toDrop) disconnectRelay(u);
+  toast(`switched to signer relays (${toAdd.length} added, ${toDrop.length} removed)`);
+  return { relays: wanted, added: toAdd, dropped: toDrop };
+}
+
+// Spec: clients should send switch_relays immediately upon establishing a
+// connection so the signer can redirect them to its preferred relay set.
+async function fetchPreferredRelays() {
+  try {
+    const res = await sendRequest('switch_relays', [], { silent: true });
+    await applySwitchRelays(res);
+  } catch (e) {
+    log('err', `switch_relays failed: ${e.message}`);
+  }
+}
+
 $('btn-add-relay').onclick = async () => {
   const v = $('add-relay-url').value.trim();
   if (!v) return;
@@ -1970,6 +2019,8 @@ $('btn-bunker-connect').onclick = async () => {
     toast('connected!');
     // immediately fetch user pubkey per spec
     await fetchUserPubkey();
+    // then ask for the signer's preferred relays per spec
+    await fetchPreferredRelays();
   } catch (e) {
     log('err', `connect failed: ${e.message}`);
     toast('connect failed: ' + e.message, true);
@@ -2086,6 +2137,8 @@ async function handleNostrConnectResponse(ev, payload) {
   updateStatus();
   // fetch user pk per spec
   await fetchUserPubkey();
+  // then ask for the signer's preferred relays per spec
+  await fetchPreferredRelays();
 }
 
 // --- disconnect
@@ -2271,6 +2324,11 @@ document.querySelectorAll('[data-call]').forEach(btn => {
       }
       else if (method === 'switch_relays') {
         result = await sendRequest('switch_relays', []);
+        // Per spec: immediately adopt the returned relay set
+        const sw = await applySwitchRelays(result);
+        result = sw
+          ? `relays: ${sw.relays.join(', ')}\nadded: ${sw.added.join(', ') || 'none'} · removed: ${sw.dropped.join(', ') || 'none'}`
+          : 'null — signer prefers the current relays';
       }
       else if (method === 'logout') {
         // Per NIP-46, the client MUST delete its local client-keypair on logout
@@ -2955,7 +3013,11 @@ async function bkDispatch(ev, payload, encMode, client) {
           return replyOk(nip44v3.b64encode(pt));
         }
         case 'switch_relays':
-          return replyOk(JSON.stringify([...bunker.relays.keys()]));
+          // Spec: reply with an array of relay URLs (or null if nothing to
+          // change). bkReply JSON-stringifies the whole payload — pass the raw
+          // array, NOT a pre-stringified one (that double-encodes it and the
+          // client receives '["wss://…"]' as a plain string).
+          return replyOk([...bunker.relays.keys()]);
         default:
           return replyErr(`unsupported method: ${method}`);
       }
